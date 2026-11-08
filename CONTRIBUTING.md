@@ -5,7 +5,7 @@ layer and (soon) a tray front end. Keep changes in that shape.
 
 ## Development
 
-Requirements: Rust **1.85+** and `git` in `PATH`. Nothing else — no C toolchain,
+Requirements: Rust **1.90+** and `git` in `PATH`. Nothing else — no C toolchain,
 no GUI libraries.
 
 ```sh
@@ -24,6 +24,7 @@ Windows, so a change that only passes on your machine is not done.
 | --- | --- |
 | `crates/git-check-core` | config, discovery, inspection, metrics — **no UI, no terminal output** |
 | `crates/git-check` | the `git-check` binary: argument parsing and the report |
+| `crates/git-check-tray` | tray icon and menu: consumes the same `Portfolio` |
 | `crates/git-check-core/tests/scan.rs` | integration tests over real repositories created with `git` |
 
 Anything that computes a number belongs in `core` with a test, not in `main.rs`.

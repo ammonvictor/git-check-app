@@ -6,10 +6,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `git-check-tray`: a tray binary whose icon is coloured by portfolio health
+  (ok / warn / alert), with a tooltip carrying live counts, a "Scan now" item and
+  a rescan loop driven by `interval_secs`.
+
+### Changed
+
+- MSRV raised from 1.85 to 1.90, required by `tray-icon` 0.26's ksni backend.
+
 ### Planned
 
-- Tray icon with a metrics popup (native menu): KPI cells, 30-day sparkline,
-  worst-offender rows, folder picker.
+- Metrics popup (native menu): KPI cells, 30-day sparkline, worst-offender rows,
+  folder picker.
 - Dashboard window with charts and SQLite-backed history.
 - Installers for Linux, macOS and Windows.
 

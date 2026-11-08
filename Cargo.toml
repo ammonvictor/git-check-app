@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/git-check-core", "crates/git-check"]
+members = ["crates/git-check-core", "crates/git-check", "crates/git-check-tray"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.90"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ammonvictor/git-check-app"
 homepage = "https://github.com/ammonvictor/git-check-app"

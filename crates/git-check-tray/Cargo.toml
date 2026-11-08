@@ -1,0 +1,28 @@
+[package]
+name = "git-check-tray"
+description = "Tray icon for git-check: portfolio health at a glance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+# Packaging is an M4 concern; the tray binary is not published to crates.io.
+publish = false
+
+[[bin]]
+name = "git-check-tray"
+path = "src/main.rs"
+
+[dependencies]
+git-check-core = { path = "../git-check-core", version = "0.1.0" }
+
+# The ksni backend speaks StatusNotifierItem over D-Bus, so the Linux build
+# needs no GTK, libappindicator or AppIndicator development packages.
+[target.'cfg(target_os = "linux")'.dependencies]
+tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
+
+# macOS and Windows use their native tray hosts; neither backend needs a feature.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = { version = "0.26.1", default-features = false }
