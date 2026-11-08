@@ -3,14 +3,12 @@
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 
 use git_check_core::config::{Config, Root};
-use git_check_core::discover;
-use git_check_core::inspect::{self, Backend, Depth, ScanCtx};
+use git_check_core::inspect::{Backend, Depth};
 use git_check_core::metrics::Portfolio;
 
 const BOLD: &str = "\x1b[1m";
@@ -196,18 +194,12 @@ fn effective_config(cli: &Cli, base: &Config) -> Config {
 }
 
 fn scan(config: &Config, backend: Backend, depth: Depth) -> Result<(Portfolio, u128, Vec<String>)> {
-    let started = Instant::now();
-    let discovery = discover::discover(config)?;
-    let inspector = inspect::inspector(backend)?;
-    let now = chrono::Utc::now().timestamp();
-    let ctx = ScanCtx {
-        now,
-        since: now - 366 * 86_400,
-        depth,
-    };
-    let repos = inspect::inspect_all(&discovery.repos, inspector.as_ref(), &ctx);
-    let portfolio = Portfolio::new(repos, now, config.stale_after_days);
-    Ok((portfolio, started.elapsed().as_millis(), discovery.errors))
+    let snapshot = git_check_core::scan(config, backend, depth)?;
+    Ok((
+        snapshot.portfolio,
+        snapshot.duration_ms,
+        snapshot.discovery_errors,
+    ))
 }
 
 fn report(cli: &Cli, config: &Config, color: bool) -> Result<ExitCode> {
