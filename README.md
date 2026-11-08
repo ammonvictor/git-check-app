@@ -39,7 +39,7 @@ From a checkout: `make build`, `make install`, `make check`.
 ## Quick start
 
 ```sh
-# scan the configured roots (first run seeds ~/Documents/Projects)
+# scan the configured roots (a default root is seeded on first run)
 git-check
 
 # scan one folder without touching the config
@@ -102,7 +102,7 @@ Run `git-check config path`, then edit:
 
 ```toml
 roots = [
-  { path = "/home/you/Documents/Projects", depth = 3 },
+  { path = "/Projects", depth = 3 },
   { path = "/home/you/code/oss", depth = 2, label = "oss" },
 ]
 interval_secs = 120
