@@ -5,6 +5,7 @@
 //! icon so the platform's event loop stays on the thread that created it; each
 //! finished scan replaces the icon colour, the tooltip and the popup menu.
 
+mod autostart;
 mod icon;
 mod popup;
 
@@ -35,7 +36,7 @@ enum Request {
 }
 
 fn main() {
-    let config = match Config::load() {
+    let mut config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
             eprintln!("git-check-tray: {err}");
@@ -67,12 +68,21 @@ fn main() {
             std::process::exit(1);
         });
 
-    let (menu, mut ids) = popup::build(None);
+    // Keep the OS login item in step with the config on every start: this
+    // creates it when enabled, removes it when disabled, and refreshes the
+    // executable path when the binary has moved.
+    let mut launch_at_login = config.launch_at_login;
+    if let Err(err) = autostart::apply(launch_at_login) {
+        eprintln!("git-check-tray: cannot update launch at login: {err}");
+    }
+
+    let (menu, mut ids) = popup::build(None, launch_at_login);
     tray.set_menu(Some(Box::new(menu)));
 
     let (request_tx, request_rx) = mpsc::channel();
     let (update_tx, update_rx) = mpsc::channel();
-    let worker = thread::spawn(move || worker_loop(config, interval, request_rx, update_tx));
+    let worker_config = config.clone();
+    let worker = thread::spawn(move || worker_loop(worker_config, interval, request_rx, update_tx));
 
     let menu_events = MenuEvent::receiver();
     let mut quitting = false;
@@ -85,6 +95,22 @@ fn main() {
             if event.id == ids.scan {
                 let _ = request_tx.send(Request::Rescan);
             }
+            if event.id == ids.launch {
+                let wanted = !launch_at_login;
+                match autostart::apply(wanted) {
+                    Ok(()) => {
+                        launch_at_login = wanted;
+                        config.launch_at_login = wanted;
+                        if let Err(err) = config.save() {
+                            eprintln!("git-check-tray: cannot save the config: {err}");
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("git-check-tray: cannot change launch at login: {err}");
+                    }
+                }
+                ids.launch_item.set_checked(launch_at_login);
+            }
         }
         if quitting {
             break;
@@ -93,7 +119,7 @@ fn main() {
             Ok(update) => {
                 apply(&tray, &update);
                 if update.snapshot.is_some() {
-                    let (menu, fresh_ids) = popup::build(update.snapshot.as_ref());
+                    let (menu, fresh_ids) = popup::build(update.snapshot.as_ref(), launch_at_login);
                     tray.set_menu(Some(Box::new(menu)));
                     ids = fresh_ids;
                 }

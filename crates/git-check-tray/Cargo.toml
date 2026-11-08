@@ -17,6 +17,8 @@ path = "src/main.rs"
 
 [dependencies]
 git-check-core = { path = "../git-check-core", version = "0.1.0" }
+# Native login-item registration per platform: XDG autostart, LaunchAgent, Run key.
+auto-launch = "0.6"
 
 # The ksni backend speaks StatusNotifierItem over D-Bus, so the Linux build
 # needs no GTK, libappindicator or AppIndicator development packages.

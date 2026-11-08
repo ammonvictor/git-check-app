@@ -6,7 +6,7 @@
 
 use git_check_core::metrics::{Counters, Portfolio};
 use git_check_core::Snapshot;
-use tray_icon::menu::{Menu, MenuId, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuId, MenuItem, PredefinedMenuItem};
 
 /// Eight fill levels, lowest first.
 const BLOCKS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -18,10 +18,12 @@ const NAME_WIDTH: usize = 24;
 pub struct MenuIds {
     pub scan: MenuId,
     pub quit: MenuId,
+    pub launch: MenuId,
+    pub launch_item: CheckMenuItem,
 }
 
 /// Menu for a finished scan, or a placeholder while the first one runs.
-pub fn build(snapshot: Option<&Snapshot>) -> (Menu, MenuIds) {
+pub fn build(snapshot: Option<&Snapshot>, launch_at_login: bool) -> (Menu, MenuIds) {
     let menu = Menu::new();
 
     if let Some(snapshot) = snapshot {
@@ -46,13 +48,22 @@ pub fn build(snapshot: Option<&Snapshot>) -> (Menu, MenuIds) {
 
     let scan = MenuItem::new("Scan now", true, None);
     let dashboard = MenuItem::new("Open dashboard", false, None);
+    let launch = CheckMenuItem::new("Launch at login", true, launch_at_login, None);
     let quit = MenuItem::new("Quit", true, None);
-    menu.append_items(&[&scan, &dashboard, &PredefinedMenuItem::separator(), &quit])
-        .ok();
+    menu.append_items(&[
+        &scan,
+        &dashboard,
+        &launch,
+        &PredefinedMenuItem::separator(),
+        &quit,
+    ])
+    .ok();
 
     let ids = MenuIds {
         scan: scan.id().clone(),
         quit: quit.id().clone(),
+        launch: launch.id().clone(),
+        launch_item: launch,
     };
     (menu, ids)
 }

@@ -11,6 +11,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `git-check-tray`: a tray binary whose icon is coloured by portfolio health
   (ok / warn / alert), with a tooltip carrying live counts, a "Scan now" item and
   a rescan loop driven by `interval_secs`.
+- Launch at login through each platform's native registration (XDG autostart
+  entry, macOS LaunchAgent, per-user Windows Run key), toggled from a
+  "Launch at login" checkbox and persisted as `launch_at_login`.
 - A single-instance guard: the tray holds a lock in the state directory, so a
   second launch reports "already running" and exits.
 - Metrics popup as a native menu: the KPI line (`9 dirty · 2 unpushed · 46
