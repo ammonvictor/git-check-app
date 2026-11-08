@@ -1,6 +1,7 @@
 # git-check app
 
 [![CI](https://github.com/ammonvictor/git-check-app/actions/workflows/ci.yml/badge.svg)](https://github.com/ammonvictor/git-check-app/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/git-check.svg)](https://crates.io/crates/git-check)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 Answers one question for a whole folder of projects: **what needs attention?**
@@ -15,7 +16,7 @@ metrics popup are next; see [Roadmap](#roadmap).
 
 > **Names:** the repository is `git-check-app` because the tray app is the end
 > goal; the command stays `git-check` so it reads well in a shell, and the
-> package will publish to crates.io as [`git-check`](https://crates.io/crates/git-check).
+> package is published on crates.io as [`git-check`](https://crates.io/crates/git-check).
 
 ---
 
@@ -25,7 +26,7 @@ Requires `git` in `PATH`. Nothing else — no C toolchain, no GUI or system
 libraries.
 
 ```sh
-cargo install git-check          # once published to crates.io
+cargo install git-check
 cargo install --path crates/git-check --locked   # from a clone
 ```
 
