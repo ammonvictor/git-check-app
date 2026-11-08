@@ -674,6 +674,7 @@ dependencies = [
  "auto-launch",
  "chrono",
  "git-check-core",
+ "log",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",

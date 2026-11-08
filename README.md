@@ -164,6 +164,13 @@ window, so the headline number always matches the chart underneath it.
   in 0.1.0; an in-process libgit2 backend will follow for Windows process-spawn
   cost and richer status data.
 
+## Logs
+
+The tray cannot write to a terminal when it is started by the desktop or at
+login, so it logs to `<state>/logs/git-check-tray.log` instead — rotated at 1 MiB
+with three archives kept. `GIT_CHECK_LOG=debug` (or `trace`) raises verbosity and
+`GIT_CHECK_LOG_DIR` puts the file elsewhere.
+
 ## Known limitations
 
 - No fetch, so `behind` can be stale by design.

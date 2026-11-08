@@ -7,6 +7,7 @@
 
 mod autostart;
 mod icon;
+mod logging;
 mod popup;
 
 use std::fs::File;
@@ -120,23 +121,38 @@ fn attach_menu(tray: &TrayIcon, menu: &tray_icon::menu::Menu) {
 
 fn main() {
     configure_app();
+    let log_path = logging::init();
+
     let mut config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
+            log::error!("cannot load the config: {err}");
             eprintln!("git-check-tray: {err}");
             std::process::exit(1);
         }
     };
     let interval = Duration::from_secs(config.interval_secs.max(5));
+    log::info!(
+        "starting git-check-tray; config={}, {} root(s), interval={}s, log={}",
+        Config::path().display(),
+        config.roots.len(),
+        interval.as_secs(),
+        log_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "disabled".to_string())
+    );
 
     // Two trays would fight over the same tray host, so the second one exits.
     let _instance = match acquire_instance_lock() {
         Ok(lock) => lock,
         Err(err) if err.kind() == ErrorKind::WouldBlock => {
+            log::info!("another instance holds the state lock; exiting");
             eprintln!("git-check-tray: already running");
             return;
         }
         Err(err) => {
+            log::error!("cannot lock the state directory: {err}");
             eprintln!("git-check-tray: cannot lock the state directory: {err}");
             std::process::exit(1);
         }
@@ -156,6 +172,7 @@ fn main() {
             .with_title("git-check");
     }
     let tray = builder.build().unwrap_or_else(|err| {
+        log::error!("cannot create the tray icon: {err}");
         eprintln!("git-check-tray: cannot create the tray icon: {err}");
         std::process::exit(1);
     });
@@ -165,7 +182,10 @@ fn main() {
     // executable path when the binary has moved.
     let mut launch_at_login = config.launch_at_login;
     if let Err(err) = autostart::apply(launch_at_login) {
+        log::warn!("cannot reconcile the login item: {err}");
         eprintln!("git-check-tray: cannot update launch at login: {err}");
+    } else {
+        log::info!("login item reconciled (launch_at_login={launch_at_login})");
     }
 
     let (menu, mut ids) = popup::build(None, launch_at_login);
@@ -189,10 +209,12 @@ fn main() {
         pump_run_loop();
         while let Ok(event) = menu_events.try_recv() {
             if event.id == ids.quit {
+                log::info!("menu: quit");
                 quitting = true;
                 break;
             }
             if event.id == ids.scan {
+                log::info!("menu: scan now");
                 let _ = request_tx.send(Request::Rescan);
             }
             if event.id == ids.launch {
@@ -201,11 +223,14 @@ fn main() {
                     Ok(()) => {
                         launch_at_login = wanted;
                         config.launch_at_login = wanted;
+                        log::info!("launch at login set to {wanted}");
                         if let Err(err) = config.save() {
+                            log::warn!("cannot save the config: {err}");
                             eprintln!("git-check-tray: cannot save the config: {err}");
                         }
                     }
                     Err(err) => {
+                        log::error!("cannot change launch at login: {err}");
                         eprintln!("git-check-tray: cannot change launch at login: {err}");
                     }
                 }
@@ -272,6 +297,14 @@ fn apply(tray: &TrayIcon, update: &Update) {
             if counters.errors > 0 {
                 tooltip.push_str(&format!(" · {} errors", counters.errors));
             }
+            log::info!(
+                "scan: {} repos, {} dirty, {} unpushed, tier {} ({} ms)",
+                counters.repos,
+                counters.dirty_repos,
+                counters.ahead_commits,
+                snapshot.portfolio.tier().as_str(),
+                snapshot.duration_ms
+            );
             let _ = tray.set_icon(Some(icon::for_tier(snapshot.portfolio.tier())));
             let _ = tray.set_tooltip(Some(tooltip));
         }
@@ -280,6 +313,7 @@ fn apply(tray: &TrayIcon, update: &Update) {
                 .error
                 .clone()
                 .unwrap_or_else(|| "git-check: scan failed".to_string());
+            log::error!("scan failed: {tooltip}");
             let _ = tray.set_icon(Some(icon::for_tier(Tier::Alert)));
             let _ = tray.set_tooltip(Some(tooltip));
         }

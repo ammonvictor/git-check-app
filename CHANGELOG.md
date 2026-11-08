@@ -28,6 +28,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   /Applications symlink; the release workflow builds it and `workflow_dispatch`
   can exercise it without a tag.
 
+- The tray writes a rotated log to `<state>/logs/git-check-tray.log` (1 MiB,
+  three archives); `GIT_CHECK_LOG=debug` raises verbosity and
+  `GIT_CHECK_LOG_DIR` overrides the location.
+
 ### Changed
 
 - MSRV raised from 1.85 to 1.90, required by `tray-icon` 0.26's ksni backend.
