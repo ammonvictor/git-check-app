@@ -12,7 +12,7 @@ activity and machine-readable output. Born as a 40-line bash loop, rebuilt in
 Rust so the same engine can grow a tray icon and ship on Linux, macOS and Windows.
 
 **Status:** 0.1.0 — headless core + CLI, working and tested. The tray icon and
-metrics popup are next (see [PLAN.md](PLAN.md)).
+metrics popup are next; see [Roadmap](#roadmap).
 
 > **Names:** the repository is `git-check-app` because the tray app is the end
 > goal; the command stays `git-check` so it reads well in a shell, and the
@@ -172,6 +172,22 @@ window, so the headline number always matches the chart underneath it.
 - Bare repositories are not reported (they have no working tree).
 - Commit history window is 12 months; `streak_days` is bounded by it.
 - `--backend libgit2` is not built in this release and exits with a clear error.
+
+## Roadmap
+
+The goal is a tray app you install once and forget, not a CLI you have to remember
+to run.
+
+| Milestone | Scope | State |
+| --- | --- | --- |
+| **M1** | tray icon, metrics popup, background scan loop, launch at login | next |
+| **M4** | installers: `.deb` (done), `.dmg`, MSI/NSIS, file logging | after M1 |
+| **M2** | SQLite history, dashboard window with charts, per-root rollups | after the MVP |
+| **M3** | native folder picker, file watching | later |
+
+The installable MVP is **M1 plus the packaging half of M4**: a tray icon with its
+metrics popup that installs on Linux, macOS and Windows. The dashboard and history
+are deliberately v1.1 features — they are not allowed to delay an installable app.
 
 ## Development
 

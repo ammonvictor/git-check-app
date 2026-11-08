@@ -5,8 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        The project's direction is tracked in `PLAN.md` (tray icon → dashboard →
-        installers). Ideas that fit that shape are especially welcome.
+        The project's direction follows the roadmap in the README: an installable
+        tray app first, then the dashboard. Ideas that fit that shape are
+        especially welcome.
 
   - type: textarea
     id: problem

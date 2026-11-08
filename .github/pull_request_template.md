@@ -18,6 +18,6 @@ make check
 
 - [ ] `make check` passes (fmt, clippy `-D warnings`, tests)
 - [ ] New behaviour has a test, or the PR explains why it cannot be tested
-- [ ] `README.md` / `PLAN.md` updated if a metric definition or behaviour changed
+- [ ] `README.md` updated if a metric definition or behaviour changed
 - [ ] No secrets, tokens or personal paths added to code, fixtures or docs
 - [ ] Commits are scoped and the subject follows `area: imperative summary`

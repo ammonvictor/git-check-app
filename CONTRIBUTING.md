@@ -45,7 +45,7 @@ The tray app and the JSON output must be able to reuse it.
    before the change.
 3. Public metrics (counts, trend, definitions) stay consistent between the CLI,
    `--json` and the docs. If you redefine a metric, update all three.
-4. Docs that describe behaviour (`README.md`, `PLAN.md`) move with the code.
+4. Docs that describe behaviour (`README.md`) move with the code.
 
 ## Definition changes
 
