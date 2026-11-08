@@ -8,6 +8,9 @@
 mod icon;
 mod popup;
 
+use std::fs::File;
+use std::io::{ErrorKind, Result as IoResult};
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::Duration;
@@ -40,6 +43,19 @@ fn main() {
         }
     };
     let interval = Duration::from_secs(config.interval_secs.max(5));
+
+    // Two trays would fight over the same tray host, so the second one exits.
+    let _instance = match acquire_instance_lock() {
+        Ok(lock) => lock,
+        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+            eprintln!("git-check-tray: already running");
+            return;
+        }
+        Err(err) => {
+            eprintln!("git-check-tray: cannot lock the state directory: {err}");
+            std::process::exit(1);
+        }
+    };
 
     let tray = TrayIconBuilder::new()
         .with_title("git-check")
@@ -120,6 +136,28 @@ fn apply(tray: &TrayIcon, update: &Update) {
     }
 }
 
+/// Hold an exclusive lock on the state directory for as long as the tray runs.
+fn acquire_instance_lock() -> IoResult<File> {
+    acquire_lock_in(&Config::state_dir())
+}
+
+fn acquire_lock_in(dir: &Path) -> IoResult<File> {
+    std::fs::create_dir_all(dir)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("tray.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => Err(std::io::Error::new(
+            ErrorKind::WouldBlock,
+            "another instance holds the lock",
+        )),
+        Err(std::fs::TryLockError::Error(err)) => Err(err),
+    }
+}
+
 fn worker_loop(
     config: Config,
     interval: Duration,
@@ -149,5 +187,25 @@ fn worker_loop(
             Ok(Request::Quit) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => continue,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_second_instance_holds_no_lock() {
+        let dir = std::env::temp_dir().join(format!("git-check-tray-lock-{}", std::process::id()));
+        let first = acquire_lock_in(&dir).expect("first instance");
+        let second = acquire_lock_in(&dir);
+        match second {
+            Err(err) => assert_eq!(err.kind(), ErrorKind::WouldBlock),
+            Ok(_) => panic!("second instance acquired the lock"),
+        }
+        drop(first);
+        let third = acquire_lock_in(&dir).expect("lock is released with the first instance");
+        drop(third);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
