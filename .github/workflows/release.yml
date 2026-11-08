@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Lets the packaging jobs be exercised without cutting a tag. Publishing is
+  # gated on a tag, so a dispatch only produces artifacts.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version used in artifact names (default: Cargo.toml)"
+        required: false
 
 permissions:
   contents: write
@@ -87,9 +94,50 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
 
+  dmg:
+    name: macOS .app and .dmg
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build a universal tray binary
+        run: |
+          cargo build --release --locked -p git-check-tray --target aarch64-apple-darwin
+          cargo build --release --locked -p git-check-tray --target x86_64-apple-darwin
+          mkdir -p target/universal
+          lipo -create -output target/universal/git-check-tray \
+            target/aarch64-apple-darwin/release/git-check-tray \
+            target/x86_64-apple-darwin/release/git-check-tray
+
+      - name: Bundle and package
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${VERSION_INPUT:-$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)}"
+          fi
+          scripts/macos-bundle.sh "$version" target/universal/git-check-tray dist
+        env:
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
+
   publish:
     name: publish release
-    needs: [binaries, deb]
+    needs: [binaries, deb, dmg]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
