@@ -64,17 +64,59 @@ fn configure_app() {}
 /// service; their tray backends run on their own threads.
 #[cfg(target_os = "macos")]
 fn pump_run_loop() {
-    use objc2_foundation::{NSDate, NSDefaultRunLoopMode, NSRunLoop};
-    let run_loop = NSRunLoop::currentRunLoop();
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSEventMask};
+    use objc2_foundation::{NSDate, NSDefaultRunLoopMode};
+    let Some(marker) = MainThreadMarker::new() else {
+        return;
+    };
+    let app = NSApplication::sharedApplication(marker);
     let until = NSDate::dateWithTimeIntervalSinceNow(0.05);
-    // SAFETY: NSDefaultRunLoopMode is an immutable framework constant.
+    // SAFETY: NSDefaultRunLoopMode is an immutable framework constant, and all
+    // of this runs on the main thread.
     unsafe {
-        run_loop.runMode_beforeDate(NSDefaultRunLoopMode, &until);
+        if let Some(event) = app.nextEventMatchingMask_untilDate_inMode_dequeue(
+            NSEventMask::Any,
+            Some(&until),
+            NSDefaultRunLoopMode,
+            true,
+        ) {
+            if std::env::var_os("GIT_CHECK_TRAY_TRACE").is_some() {
+                eprintln!("macos event type={}", event.r#type().0);
+            }
+            // Running the run loop alone never dispatches mouse events to
+            // views; the application has to send each event itself.
+            app.sendEvent(&event);
+        }
     }
 }
 
 #[cfg(not(target_os = "macos"))]
 fn pump_run_loop() {}
+
+/// macOS: give the status item the NSMenu itself.
+///
+/// tray-icon normally receives clicks through a subview it installs over the
+/// status item button. That subview does not take a first click while another
+/// app is active (and an accessory app cannot activate itself), so clicks were
+/// being swallowed. A menu attached to the NSStatusItem is opened by AppKit,
+/// which gets the click regardless of the active app.
+#[cfg(target_os = "macos")]
+fn attach_menu(tray: &TrayIcon, menu: &tray_icon::menu::Menu) {
+    use objc2_app_kit::NSMenu;
+    use tray_icon::menu::ContextMenu;
+    let Some(status_item) = tray.ns_status_item() else {
+        return;
+    };
+    let pointer = menu.ns_menu();
+    if pointer.is_null() {
+        return;
+    }
+    // SAFETY: muda hands back the NSMenu it retains for this Menu, and the tray
+    // keeps the Menu alive for as long as the status item shows it.
+    let ns_menu = unsafe { &*(pointer as *const NSMenu) };
+    status_item.setMenu(Some(ns_menu));
+}
 
 fn main() {
     configure_app();
@@ -127,6 +169,8 @@ fn main() {
     }
 
     let (menu, mut ids) = popup::build(None, launch_at_login);
+    #[cfg(target_os = "macos")]
+    attach_menu(&tray, &menu);
     tray.set_menu(Some(Box::new(menu)));
 
     let (request_tx, request_rx) = mpsc::channel();
@@ -185,6 +229,8 @@ fn main() {
                 }
                 if update.snapshot.is_some() {
                     let (menu, fresh_ids) = popup::build(update.snapshot.as_ref(), launch_at_login);
+                    #[cfg(target_os = "macos")]
+                    attach_menu(&tray, &menu);
                     tray.set_menu(Some(Box::new(menu)));
                     ids = fresh_ids;
                     if trace_menu && !menu_shown {
