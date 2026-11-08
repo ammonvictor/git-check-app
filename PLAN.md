@@ -10,6 +10,46 @@ for later milestones but not for M0.
 Repository: **https://github.com/ammonvictor/git-check-app** (public). Binary and
 crates.io package: **`git-check`**.
 
+## 0. Where the plan stands (audited 2026-11-08)
+
+Repository is public and green: `main` CI passes on Ubuntu, macOS, Windows, MSRV
+and docs. Everything below is measured against the code in `main`, not against
+intent.
+
+| Plan area | State | Exists | Missing |
+| --- | --- | --- | --- |
+| §1 capabilities | **3 of 8** | folder targeting, scanning, CLI | tray icon, popup, dashboard, history, autostart |
+| §4 stack | decided | `tray-icon`/`ksni` + `muda` + `egui`, no GTK on Linux | libgit2 backend (needs cmake) |
+| §5 layout | **3 of 6** | core, cli, CI, release workflow | tray crate, icon assets, `Packager.toml` |
+| §6 data model | **done** | `Portfolio`, `RepoStatus`, counters, derived state | per-root grouping/labels |
+| §7 metrics | **definitions complete** | all 15 metric definitions computed; 17 counters, 30-day trend, streak, ranking, tier | 3 analytics views: weekday×hour heatmap, per-root rollup, day-over-day deltas |
+| §8 popup | **none** | — | everything |
+| §9 dashboard | **none** | — | everything |
+| §10 folder UX | **CLI only** | `roots add/list/remove`, depth, labels, seed roots | native folder picker, in-app editing |
+| §11 scan engine | **CLI backend only** | rayon, worktrees, detached/unborn, permission errors | libgit2, per-repo timeout, large-untracked guard |
+| §12 persistence | **none** | — | SQLite, daily snapshots |
+| §13 installability | **Linux only** | 3-OS CI, tag→binaries+`.deb` workflow, `.deb` verified | AppImage/dmg/msi, icons, autostart, single-instance, logging |
+| §14 milestones | **M0 done** | 7 tests, parity with `git-check.sh` | M1–M3; roughly a third of M4 |
+
+**Overall: about 30% of the plan — all of it engine, none of it app.** M0 is
+complete and shippable as a CLI; the visible product (tray, popup, dashboard,
+history) has not started.
+
+### MVP definition and revised delivery order
+
+*Installable MVP* = the tray icon with its metrics popup, installable on Linux,
+macOS and Windows. That is **M1 plus the packaging half of M4**. It does **not**
+require the dashboard, SQLite history, watch mode, the folder picker or the
+heatmap: the CLI already manages folders, and history is a v1.1 nicety.
+
+Delivery order therefore becomes: **M1 (tray + popup) → M4 packaging → M2
+(dashboard + history) → M3 (picker + watch)**. The first thing to build in M1 is
+a throwaway spike — one icon, a three-item `muda` menu, on GNOME and KDE — because
+the `ksni`+`muda` interaction is the only genuinely unknown part of the plan.
+
+`git-check.sh` stays in place until that MVP installs cleanly on all three
+platforms, then gets replaced by a one-release deprecation shim around the CLI.
+
 Goal: turn `~/Documents/Projects/git-check.sh` into an installable, cross-platform
 desktop tool (Linux/Ubuntu, macOS, Windows) that watches a user-chosen set of
 project folders, shows a tray icon, and exposes portfolio-wide git metrics and
@@ -527,8 +567,8 @@ Each milestone leaves `main` runnable, per the trunk-based convention.
    ships (M4).
 3. **Depth and roots** — one root (`~/Documents/Projects`) with depth 3, or several
    labelled roots out of the box (work vs OSS)?
-4. **The old script** — keep `git-check.sh` as a thin wrapper around the CLI now
-   that M0 matches its output, or delete it?
+4. ~~**The old script**~~ — **answered: keep `git-check.sh`** until the MVP is
+   installable, then replace it with a one-release shim around `git-check`.
 5. ~~**Repo hosting**~~ — **answered: GitHub**, `ammonvictor/git-check-app`,
    public. `origin` is configured; the first push is still pending.
 

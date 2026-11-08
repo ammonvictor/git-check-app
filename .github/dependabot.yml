@@ -17,3 +17,7 @@ updates:
       interval: monthly
     commit-message:
       prefix: "ci"
+    ignore:
+      # dtolnay/rust-toolchain uses the ref as the *toolchain version*, not an
+      # action version: a semver bump asks for a Rust release that may not exist.
+      - dependency-name: dtolnay/rust-toolchain
