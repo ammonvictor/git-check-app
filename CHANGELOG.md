@@ -28,6 +28,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   /Applications symlink; the release workflow builds it and `workflow_dispatch`
   can exercise it without a tag.
 
+- A "Choose folder…" tray action: a native picker (xdg-portal on Linux, so
+  still GTK-free) adds a root, saves it to the config and rescans at once.
+- First run no longer latches onto an empty default root; with no repositories
+  the popup says "No repositories found" and points at the folder chooser, and
+  the CLI prints how to add a root.
 - The tray writes a rotated log to `<state>/logs/git-check-tray.log` (1 MiB,
   three archives); `GIT_CHECK_LOG=debug` raises verbosity and
   `GIT_CHECK_LOG_DIR` overrides the location.

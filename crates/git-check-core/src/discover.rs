@@ -30,6 +30,11 @@ impl Discovery {
 
 /// Walk every root and collect repositories, sorted by name.
 pub fn discover(config: &Config) -> Result<Discovery> {
+    // Having no roots configured yet is a first-run state, not an error: the
+    // tray offers a folder chooser and the CLI prints how to add one.
+    if config.roots.is_empty() {
+        return Ok(Discovery::default());
+    }
     let roots = config.existing_roots();
     discover_roots(&roots, &config.exclude, config.follow_nested)
 }
@@ -118,5 +123,21 @@ pub fn is_repo(dir: &Path) -> bool {
     match std::fs::symlink_metadata(&git) {
         Ok(meta) => meta.is_dir() || meta.is_file(),
         Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_configured_roots_yields_an_empty_discovery() {
+        let config = Config {
+            roots: Vec::new(),
+            ..Config::default()
+        };
+        let discovery = discover(&config).expect("empty roots are not an error");
+        assert!(discovery.repos.is_empty());
+        assert!(discovery.errors.is_empty());
     }
 }

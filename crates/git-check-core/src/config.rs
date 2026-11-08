@@ -95,17 +95,31 @@ fn default_exclude() -> Vec<String> {
 
 fn default_roots() -> Vec<Root> {
     let home = dirs_home();
-    let candidates = ["Documents/Projects", "Projects", "code", "src"];
+    let candidates: Vec<PathBuf> = ["Documents/Projects", "Projects", "code", "src"]
+        .iter()
+        .map(|candidate| home.join(candidate))
+        .filter(|path| path.is_dir())
+        .collect();
+
+    // A directory that exists but holds nothing is not a projects folder.
+    // Seeding it silently produced an empty portfolio on machines that keep an
+    // empty ~/Documents/Projects around; the tray now asks for a folder instead.
     let mut roots: Vec<Root> = candidates
         .iter()
-        .map(|c| home.join(c))
-        .filter(|p| p.is_dir())
-        .map(|p| Root::new(p, 3, None))
+        .filter(|path| !is_empty_directory(path))
+        .map(|path| Root::new(path.clone(), 3, None))
         .collect();
-    if roots.is_empty() {
+
+    if roots.is_empty() && candidates.is_empty() {
         roots.push(Root::new(home, 2, None));
     }
     roots
+}
+
+fn is_empty_directory(path: &Path) -> bool {
+    std::fs::read_dir(path)
+        .map(|mut entries| entries.next().is_none())
+        .unwrap_or(false)
 }
 
 fn dirs_home() -> PathBuf {
@@ -214,5 +228,24 @@ impl Config {
             .filter(|root| Self::expand(&root.path).is_dir())
             .cloned()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_directories_are_recognised() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(is_empty_directory(dir.path()));
+        std::fs::write(dir.path().join("file"), b"x").unwrap();
+        assert!(!is_empty_directory(dir.path()));
+    }
+
+    #[test]
+    fn missing_directories_are_not_treated_as_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!is_empty_directory(&dir.path().join("nope")));
     }
 }

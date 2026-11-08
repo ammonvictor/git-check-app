@@ -26,6 +26,8 @@ log = "0.4"
 # needs no GTK, libappindicator or AppIndicator development packages.
 [target.'cfg(target_os = "linux")'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
+# xdg-portal keeps the dialog GTK-free, matching the tray backend.
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 # macOS needs AppKit directly to become an accessory app (no Dock icon).
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -36,3 +38,4 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 # macOS and Windows use their native tray hosts; neither backend needs a feature.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false }
+rfd = { version = "0.17", default-features = false }

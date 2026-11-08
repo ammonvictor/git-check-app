@@ -156,6 +156,11 @@ fn run() -> Result<ExitCode> {
     match cli.command {
         None | Some(Command::Report) => {
             let effective = effective_config(&cli, &config);
+            if effective.roots.is_empty() {
+                eprintln!(
+                    "no roots configured; add one with `git-check roots add DIR` or use --root DIR"
+                );
+            }
             report(&cli, &effective, color)
         }
         Some(Command::Roots { ref action }) => roots(&cli, &config, action),

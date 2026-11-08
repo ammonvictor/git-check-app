@@ -17,7 +17,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::Duration;
 
-use git_check_core::config::Config;
+use git_check_core::config::{Config, Root};
 use git_check_core::inspect::{Backend, Depth};
 use git_check_core::metrics::Tier;
 use git_check_core::Snapshot;
@@ -33,6 +33,8 @@ struct Update {
 /// Work the UI sends to the scan thread.
 enum Request {
     Rescan,
+    /// Roots changed: use this config from now on and rescan.
+    Config(Box<Config>),
     Quit,
 }
 
@@ -217,6 +219,24 @@ fn main() {
                 log::info!("menu: scan now");
                 let _ = request_tx.send(Request::Rescan);
             }
+            if event.id == ids.choose {
+                log::info!("menu: choose folder");
+                if let Some(folder) = choose_folder() {
+                    if config.roots.iter().any(|root| root.path == folder) {
+                        log::info!("{} is already a root", folder.display());
+                    } else {
+                        config.roots.push(Root::new(folder.clone(), 3, None));
+                        match config.save() {
+                            Ok(()) => log::info!("added root {}", folder.display()),
+                            Err(err) => {
+                                log::error!("cannot save the config: {err}");
+                                eprintln!("git-check-tray: cannot save the config: {err}");
+                            }
+                        }
+                        let _ = request_tx.send(Request::Config(Box::new(config.clone())));
+                    }
+                }
+            }
             if event.id == ids.launch {
                 let wanted = !launch_at_login;
                 match autostart::apply(wanted) {
@@ -271,6 +291,13 @@ fn main() {
 
     let _ = request_tx.send(Request::Quit);
     let _ = worker.join();
+}
+
+/// Native folder chooser; returns None when the user cancels.
+fn choose_folder() -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Choose a folder to scan")
+        .pick_folder()
 }
 
 /// Icon colour and tooltip for a finished scan, or the failure state.
@@ -343,7 +370,7 @@ fn acquire_lock_in(dir: &Path) -> IoResult<File> {
 }
 
 fn worker_loop(
-    config: Config,
+    mut config: Config,
     interval: Duration,
     requests: Receiver<Request>,
     updates: Sender<Update>,
@@ -368,6 +395,10 @@ fn worker_loop(
         }
         match requests.recv_timeout(interval) {
             Ok(Request::Rescan) => continue,
+            Ok(Request::Config(next)) => {
+                config = *next;
+                continue;
+            }
             Ok(Request::Quit) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => continue,
         }

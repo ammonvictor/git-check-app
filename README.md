@@ -117,6 +117,8 @@ launch_at_login = false
 - `exclude` names are pruned; hidden directories are searched except `.git`.
 - A directory is a repository when it contains `.git` as a **directory** (normal
   checkout) **or a file** (linked worktree / submodule checkout).
+- The tray's **Choose folder…** menu item adds a root and rescans, so the file
+  only needs editing for depth, labels or exclusions.
 - `GIT_CHECK_CONFIG` and `GIT_CHECK_STATE` override the platform paths
   (`~/.config/git-check`, `~/.local/state/git-check` on Linux).
 

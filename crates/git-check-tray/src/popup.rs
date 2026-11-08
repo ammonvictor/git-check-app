@@ -17,6 +17,7 @@ const NAME_WIDTH: usize = 24;
 /// Items the main loop has to recognise after the menu is replaced.
 pub struct MenuIds {
     pub scan: MenuId,
+    pub choose: MenuId,
     pub quit: MenuId,
     pub launch: MenuId,
     pub launch_item: CheckMenuItem,
@@ -33,7 +34,9 @@ pub fn build(snapshot: Option<&Snapshot>, launch_at_login: bool) -> (Menu, MenuI
         separator(&menu);
 
         let ranked = snapshot.portfolio.ranked();
-        if ranked.is_empty() {
+        if counters.repos == 0 {
+            append(&menu, "No repositories found".to_string());
+        } else if ranked.is_empty() {
             append(&menu, "Nothing needs attention".to_string());
         } else {
             for repo in ranked.into_iter().take(3) {
@@ -47,11 +50,13 @@ pub fn build(snapshot: Option<&Snapshot>, launch_at_login: bool) -> (Menu, MenuI
     }
 
     let scan = MenuItem::new("Scan now", true, None);
+    let choose = MenuItem::new("Choose folder…", true, None);
     let dashboard = MenuItem::new("Open dashboard", false, None);
     let launch = CheckMenuItem::new("Launch at login", true, launch_at_login, None);
     let quit = MenuItem::new("Quit", true, None);
     menu.append_items(&[
         &scan,
+        &choose,
         &dashboard,
         &launch,
         &PredefinedMenuItem::separator(),
@@ -61,6 +66,7 @@ pub fn build(snapshot: Option<&Snapshot>, launch_at_login: bool) -> (Menu, MenuI
 
     let ids = MenuIds {
         scan: scan.id().clone(),
+        choose: choose.id().clone(),
         quit: quit.id().clone(),
         launch: launch.id().clone(),
         launch_item: launch,
