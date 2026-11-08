@@ -1,0 +1,36 @@
+[package]
+name = "git-check"
+description = "Portfolio-wide git status for a folder of projects, from the CLI today and a tray app next"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+keywords = ["git", "status", "repo-management", "cli", "productivity"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "git-check"
+path = "src/main.rs"
+
+[dependencies]
+git-check-core = { path = "../git-check-core", version = "0.1.0" }
+serde_json.workspace = true
+toml.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[package.metadata.deb]
+maintainer = "Ammon Victor <ammon.victor@kwano.org>"
+section = "vcs"
+priority = "optional"
+depends = "$auto, git"
+extended-description = """Reports which repositories under a folder need attention: dirty working
+trees, unpushed commits, branches behind their upstream, conflicts, stashes and
+cold projects, with portfolio-wide counts and commit activity. Local only: it
+never fetches, never talks to a network and never writes to the repositories it
+inspects."""

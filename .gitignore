@@ -1,4 +1,5 @@
 /target/
+/dist/
 **/*.rs.bk
 
 # Keep Cargo.lock: this workspace ships binaries, so builds should be reproducible.

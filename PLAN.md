@@ -7,6 +7,9 @@ Decisions taken after review: **build M0 first** (CLI only, no tray yet) and
 **target a public release**, which moves signing/notarization/updating into scope
 for later milestones but not for M0.
 
+Repository: **https://github.com/ammonvictor/git-check-app** (public). Binary and
+crates.io package: **`git-check`**.
+
 Goal: turn `~/Documents/Projects/git-check.sh` into an installable, cross-platform
 desktop tool (Linux/Ubuntu, macOS, Windows) that watches a user-chosen set of
 project folders, shows a tray icon, and exposes portfolio-wide git metrics and
@@ -139,7 +142,7 @@ Explicitly **not** used: `tauri` (2.x stable, 3.x alpha — heavier than needed)
 ## 5. Repository layout
 
 ```
-git-check/
+git-check-app/
 ├── Cargo.toml                 # workspace
 ├── Packager.toml              # M4: cargo-packager (deb, appimage, dmg, nsis, msi)
 ├── Makefile                   # build / test / lint / install
@@ -152,10 +155,12 @@ git-check/
 │   │   ├── src/inspect/       # Inspector trait + cli backend (libgit2 in M1)
 │   │   ├── src/metrics.rs     # Portfolio, counters, trend, ranking
 │   │   └── tests/scan.rs      # 7 integration tests over real git fixtures
-│   ├── git-check-cli/         # bin: git-check — DELIVERED in M0
-│   └── git-check-app/         # M1: bin: git-check-tray (tray icon, menu, dashboard)
+│   ├── git-check/             # bin: git-check — DELIVERED in M0
+│   └── git-check-tray/        # M1: tray icon, menu, dashboard (bin: git-check-tray)
 ├── assets/                    # M1/M4: icons (png/ico/icns), desktop entry
-└── .github/workflows/release.yml   # M4: 3-OS matrix (or Forgejo equivalent)
+├── .github/workflows/ci.yml       # 3-OS matrix: fmt, clippy, test, build
+├── .github/workflows/release.yml  # tag v* -> binaries, .deb, GitHub release
+└── LICENSE-MIT, LICENSE-APACHE, CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md
 ```
 
 `core` has zero GUI dependencies, so it is unit-testable on a headless CI runner and
@@ -380,9 +385,34 @@ long-running transactions, so a crashed scan cannot corrupt the file.
   the running dashboard instead of starting a second tray icon.
 - Logging to `<state>/logs/git-check.log` with rotation; `--log-level` and
   `RUST_LOG` override.
-- CI (`.github` or Forgejo Actions, whichever you prefer for `git.kwano.org`):
-  matrix `ubuntu-latest` / `macos-14` (arm64) + `macos-13` (x86_64) / `windows-latest`;
-  cache cargo; upload artifacts; tag → attach release files.
+- CI (GitHub Actions, `.github/workflows/`): matrix `ubuntu-latest` /
+  `macos-latest` (arm64) / `macos-13` (x86_64) / `windows-latest`; fmt, clippy
+  `-D warnings`, tests, release build; cache cargo. Tag `v*` → attach binaries,
+  `.deb` and release notes.
+
+### Hosting and first publish (GitHub)
+
+The repo exists locally with `origin` set to
+`git@github.com:ammonvictor/git-check-app.git`. Nothing has been pushed yet.
+
+```sh
+# create the empty public repo (once), then push
+gh repo create ammonvictor/git-check-app --public --source=. --remote=origin --push
+# or, via the web UI: create an empty repo with the same name, then
+git push -u origin main
+```
+
+Repository settings worth setting on day one: description ("Portfolio-wide git
+status for a folder of projects — CLI today, tray app next"), topics
+(`git`, `rust`, `cli`, `developer-tools`, `productivity`, `tray-app`), Issues
+enabled, private vulnerability reporting enabled (used by `SECURITY.md`),
+Discussions optional.
+
+Release flow: bump `version` in the workspace `Cargo.toml`, update
+`CHANGELOG.md`, `git tag v0.1.0 && git push origin v0.1.0` — the release workflow
+builds the artifacts and drafts the GitHub release. Publishing to crates.io
+(`cargo publish -p git-check-core && cargo publish -p git-check`) is a separate,
+manual step so a tag never half-publishes.
 
 ### Public-release path for the CLI (the M0 deliverable)
 
@@ -391,8 +421,8 @@ tray is still being built:
 
 | Channel | Artifact | Notes |
 | --- | --- | --- |
-| Forgejo/GitHub releases | `git-check-<ver>-{x86_64-unknown-linux-gnu,aarch64-unknown-linux-musl,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-msvc}.tar.gz/.zip` | static-ish binaries, no runtime deps; `musl` build covers older glibc |
-| `cargo install git-check-cli` | source | once the crate is published |
+| GitHub releases (shipped by `release.yml`) | `git-check-<ver>-{x86_64-unknown-linux-gnu,aarch64-apple-darwin,x86_64-apple-darwin,x86_64-pc-windows-msvc}.tar.gz/.zip` | no runtime deps; `musl` and `aarch64-linux` builds are a later addition |
+| `cargo install git-check` | source | once the crate is published |
 | `.deb` / `.rpm` | via `cargo-deb` / `cargo-generate-rpm` or cargo-packager | for Ubuntu users; `Depends: git` only |
 | Homebrew tap | formula pointing at the release tarball | cheapest macOS path, no notarization needed for brew installs |
 | `winget` / Scoop | manifest pointing at the `.zip` | winget manifest is a PR to microsoft/winget-pkgs |
@@ -499,8 +529,8 @@ Each milestone leaves `main` runnable, per the trunk-based convention.
    labelled roots out of the box (work vs OSS)?
 4. **The old script** — keep `git-check.sh` as a thin wrapper around the CLI now
    that M0 matches its output, or delete it?
-5. **Repo hosting** — new repo on `git.kwano.org` under your owner account (with the
-   `pythia` remote for agent pushes), or a plain local repo for now?
+5. ~~**Repo hosting**~~ — **answered: GitHub**, `ammonvictor/git-check-app`,
+   public. `origin` is configured; the first push is still pending.
 
 ---
 

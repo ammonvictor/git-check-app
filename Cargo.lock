@@ -280,7 +280,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "git-check-cli"
+name = "git-check"
 version = "0.1.0"
 dependencies = [
  "anyhow",

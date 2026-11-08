@@ -35,10 +35,10 @@ check:
 	cargo test
 
 install:
-	cargo install --path crates/git-check-cli --locked
+	cargo install --path crates/git-check --locked
 
 uninstall:
-	cargo uninstall git-check-cli
+	cargo uninstall git-check
 
 clean:
 	cargo clean

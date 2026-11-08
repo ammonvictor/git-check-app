@@ -1,11 +1,15 @@
 [package]
 name = "git-check-core"
-description = "Portfolio-wide git inspection: discovery, scanning, metrics"
+description = "Portfolio-wide git inspection: repository discovery, scanning and metrics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords = ["git", "status", "repository", "analytics"]
+categories = ["development-tools", "filesystem"]
 
 [dependencies]
 serde.workspace = true
@@ -18,4 +22,3 @@ chrono.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
-

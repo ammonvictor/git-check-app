@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a metric, a platform behaviour or an integration
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The project's direction is tracked in `PLAN.md` (tray icon → dashboard →
+        installers). Ideas that fit that shape are especially welcome.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to find out?
+      description: Describe the question you want git-check to answer, not just the UI you imagine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should the CLI, the popup or the dashboard show or do?
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does this belong?
+      options:
+        - CLI report
+        - JSON output
+        - Tray icon / popup
+        - Dashboard window
+        - Packaging / installation
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools or workflows you tried, and why they fell short.
