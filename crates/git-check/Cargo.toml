@@ -25,7 +25,7 @@ anyhow.workspace = true
 clap.workspace = true
 
 [package.metadata.deb]
-maintainer = "Ammon Victor <ammon.victor@kwano.org>"
+maintainer = "Ammon Victor"
 section = "vcs"
 priority = "optional"
 depends = "$auto, git"

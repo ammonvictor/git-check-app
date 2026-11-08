@@ -9,7 +9,7 @@ rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ammonvictor/git-check-app"
 homepage = "https://github.com/ammonvictor/git-check-app"
-authors = ["Ammon Victor <ammon.victor@kwano.org>"]
+authors = ["Ammon Victor"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
