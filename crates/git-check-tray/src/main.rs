@@ -2,10 +2,11 @@
 //!
 //! A background thread rescans the configured roots on the configured
 //! interval (and whenever "Scan now" is chosen). The main thread owns the tray
-//! icon so the platform's event loop stays on the thread that created it, and
-//! only the icon colour and tooltip change as scans complete.
+//! icon so the platform's event loop stays on the thread that created it; each
+//! finished scan replaces the icon colour, the tooltip and the popup menu.
 
 mod icon;
+mod popup;
 
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
@@ -15,13 +16,13 @@ use git_check_core::config::Config;
 use git_check_core::inspect::{Backend, Depth};
 use git_check_core::metrics::Tier;
 use git_check_core::Snapshot;
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::TrayIconBuilder;
+use tray_icon::menu::MenuEvent;
+use tray_icon::{TrayIcon, TrayIconBuilder};
 
-/// What a finished scan tells the tray.
+/// Result of one scan, or the reason it failed.
 struct Update {
-    tier: Tier,
-    tooltip: String,
+    snapshot: Option<Snapshot>,
+    error: Option<String>,
 }
 
 /// Work the UI sends to the scan thread.
@@ -40,20 +41,7 @@ fn main() {
     };
     let interval = Duration::from_secs(config.interval_secs.max(5));
 
-    let scan_item = MenuItem::new("Scan now", true, None);
-    let dashboard_item = MenuItem::new("Open dashboard", false, None);
-    let quit_item = MenuItem::new("Quit", true, None);
-    let menu = Menu::new();
-    menu.append_items(&[
-        &scan_item,
-        &dashboard_item,
-        &PredefinedMenuItem::separator(),
-        &quit_item,
-    ])
-    .expect("menu");
-
     let tray = TrayIconBuilder::new()
-        .with_menu(Box::new(menu))
         .with_title("git-check")
         .with_tooltip("git-check: scanning")
         .with_icon(icon::for_tier(Tier::Ok))
@@ -63,6 +51,9 @@ fn main() {
             std::process::exit(1);
         });
 
+    let (menu, mut ids) = popup::build(None);
+    tray.set_menu(Some(Box::new(menu)));
+
     let (request_tx, request_rx) = mpsc::channel();
     let (update_tx, update_rx) = mpsc::channel();
     let worker = thread::spawn(move || worker_loop(config, interval, request_rx, update_tx));
@@ -71,11 +62,11 @@ fn main() {
     let mut quitting = false;
     while !quitting {
         while let Ok(event) = menu_events.try_recv() {
-            if event.id == quit_item.id() {
+            if event.id == ids.quit {
                 quitting = true;
                 break;
             }
-            if event.id == scan_item.id() {
+            if event.id == ids.scan {
                 let _ = request_tx.send(Request::Rescan);
             }
         }
@@ -84,8 +75,12 @@ fn main() {
         }
         match update_rx.recv_timeout(Duration::from_millis(120)) {
             Ok(update) => {
-                let _ = tray.set_icon(Some(icon::for_tier(update.tier)));
-                let _ = tray.set_tooltip(Some(update.tooltip));
+                apply(&tray, &update);
+                if update.snapshot.is_some() {
+                    let (menu, fresh_ids) = popup::build(update.snapshot.as_ref());
+                    tray.set_menu(Some(Box::new(menu)));
+                    ids = fresh_ids;
+                }
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
@@ -96,6 +91,35 @@ fn main() {
     let _ = worker.join();
 }
 
+/// Icon colour and tooltip for a finished scan, or the failure state.
+fn apply(tray: &TrayIcon, update: &Update) {
+    match &update.snapshot {
+        Some(snapshot) => {
+            let counters = snapshot.portfolio.counters();
+            let mut tooltip = format!(
+                "{} repos · {} dirty · {} unpushed",
+                counters.repos, counters.dirty_repos, counters.ahead_commits
+            );
+            if counters.conflicts > 0 {
+                tooltip.push_str(&format!(" · {} conflicts", counters.conflicts));
+            }
+            if counters.errors > 0 {
+                tooltip.push_str(&format!(" · {} errors", counters.errors));
+            }
+            let _ = tray.set_icon(Some(icon::for_tier(snapshot.portfolio.tier())));
+            let _ = tray.set_tooltip(Some(tooltip));
+        }
+        None => {
+            let tooltip = update
+                .error
+                .clone()
+                .unwrap_or_else(|| "git-check: scan failed".to_string());
+            let _ = tray.set_icon(Some(icon::for_tier(Tier::Alert)));
+            let _ = tray.set_tooltip(Some(tooltip));
+        }
+    }
+}
+
 fn worker_loop(
     config: Config,
     interval: Duration,
@@ -103,13 +127,20 @@ fn worker_loop(
     updates: Sender<Update>,
 ) {
     loop {
-        let update = match git_check_core::scan(&config, Backend::Cli, Depth::Quick) {
-            Ok(snapshot) => update_from(&snapshot),
+        let started = std::time::Instant::now();
+        let update = match git_check_core::scan(&config, Backend::Cli, Depth::Full) {
+            Ok(snapshot) => Update {
+                snapshot: Some(snapshot),
+                error: None,
+            },
             Err(err) => Update {
-                tier: Tier::Alert,
-                tooltip: format!("git-check: scan failed — {err}"),
+                snapshot: None,
+                error: Some(format!("git-check: scan failed — {err}")),
             },
         };
+        if std::env::var_os("GIT_CHECK_TRAY_TRACE").is_some() {
+            eprintln!("scan finished in {} ms", started.elapsed().as_millis());
+        }
         if updates.send(update).is_err() {
             return;
         }
@@ -118,24 +149,5 @@ fn worker_loop(
             Ok(Request::Quit) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => continue,
         }
-    }
-}
-
-/// Turn a snapshot into the two things the tray displays.
-fn update_from(snapshot: &Snapshot) -> Update {
-    let counters = snapshot.portfolio.counters();
-    let mut tooltip = format!(
-        "{} repos · {} dirty · {} unpushed",
-        counters.repos, counters.dirty_repos, counters.ahead_commits
-    );
-    if counters.conflicts > 0 {
-        tooltip.push_str(&format!(" · {} conflicts", counters.conflicts));
-    }
-    if counters.errors > 0 {
-        tooltip.push_str(&format!(" · {} errors", counters.errors));
-    }
-    Update {
-        tier: snapshot.portfolio.tier(),
-        tooltip,
     }
 }

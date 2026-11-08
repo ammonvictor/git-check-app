@@ -11,6 +11,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `git-check-tray`: a tray binary whose icon is coloured by portfolio health
   (ok / warn / alert), with a tooltip carrying live counts, a "Scan now" item and
   a rescan loop driven by `interval_secs`.
+- Metrics popup as a native menu: the KPI line (`9 dirty · 2 unpushed · 46
+  cold`), a 30-day unicode sparkline and the three worst offenders, rebuilt after
+  every scan.
 
 ### Changed
 
