@@ -11,6 +11,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `git-check-tray`: a tray binary whose icon is coloured by portfolio health
   (ok / warn / alert), with a tooltip carrying live counts, a "Scan now" item and
   a rescan loop driven by `interval_secs`.
+- Platform tray fit: on macOS the icon is a template image, the app is an
+  accessory (no Dock icon) and the title is dropped; on Windows the icon is
+  generated at 64 px and the tooltip carries the last scan time.
 - Launch at login through each platform's native registration (XDG autostart
   entry, macOS LaunchAgent, per-user Windows Run key), toggled from a
   "Launch at login" checkbox and persisted as `launch_at_login`.

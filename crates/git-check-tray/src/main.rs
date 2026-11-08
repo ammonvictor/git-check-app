@@ -35,7 +35,23 @@ enum Request {
     Quit,
 }
 
+/// macOS: become an accessory app so the tray lives in the menu bar without a
+/// Dock icon or a Cmd-Tab entry.
+#[cfg(target_os = "macos")]
+fn configure_app() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    if let Some(marker) = MainThreadMarker::new() {
+        let app = NSApplication::sharedApplication(marker);
+        app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_app() {}
+
 fn main() {
+    configure_app();
     let mut config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
@@ -142,6 +158,15 @@ fn apply(tray: &TrayIcon, update: &Update) {
                 "{} repos · {} dirty · {} unpushed",
                 counters.repos, counters.dirty_repos, counters.ahead_commits
             );
+            // The counts live in the tooltip rather than the icon, so they
+            // stay legible at every DPI scaling.
+            if let Some(scan) = chrono::DateTime::from_timestamp(snapshot.portfolio.generated_at, 0)
+            {
+                tooltip.push_str(&format!(
+                    " · scanned {}",
+                    scan.with_timezone(&chrono::Local).format("%H:%M")
+                ));
+            }
             if counters.conflicts > 0 {
                 tooltip.push_str(&format!(" · {} conflicts", counters.conflicts));
             }

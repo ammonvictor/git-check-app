@@ -19,11 +19,17 @@ path = "src/main.rs"
 git-check-core = { path = "../git-check-core", version = "0.1.0" }
 # Native login-item registration per platform: XDG autostart, LaunchAgent, Run key.
 auto-launch = "0.6"
+chrono.workspace = true
 
 # The ksni backend speaks StatusNotifierItem over D-Bus, so the Linux build
 # needs no GTK, libappindicator or AppIndicator development packages.
 [target.'cfg(target_os = "linux")'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
+
+# macOS needs AppKit directly to become an accessory app (no Dock icon).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication"] }
 
 # macOS and Windows use their native tray hosts; neither backend needs a feature.
 [target.'cfg(not(target_os = "linux"))'.dependencies]

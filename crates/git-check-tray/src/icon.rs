@@ -8,24 +8,39 @@ use git_check_core::metrics::Tier;
 use tray_icon::Icon;
 
 /// Edge length of the generated icon, in pixels.
+///
+/// Windows gets a larger surface because the shell builds an HICON from these
+/// pixels; at 200% scaling a 32px icon is visibly soft, while 64px is not.
+#[cfg(target_os = "windows")]
+pub const SIZE: u32 = 64;
+#[cfg(not(target_os = "windows"))]
 pub const SIZE: u32 = 32;
+
+/// Template images must be monochrome: macOS tints them for the menu bar.
+const TEMPLATE: bool = cfg!(target_os = "macos");
 
 /// Raw RGBA pixels for a tier's icon.
 pub fn rgba_for_tier(tier: Tier) -> Vec<u8> {
-    let (red, green, blue) = match tier {
-        Tier::Ok => (0x2e, 0xa0, 0x43),
-        Tier::Warn => (0xe0, 0x8a, 0x00),
-        Tier::Alert => (0xd1, 0x24, 0x2f),
+    let (red, green, blue) = if TEMPLATE {
+        (0, 0, 0)
+    } else {
+        match tier {
+            Tier::Ok => (0x2e, 0xa0, 0x43),
+            Tier::Warn => (0xe0, 0x8a, 0x00),
+            Tier::Alert => (0xd1, 0x24, 0x2f),
+        }
     };
     let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
     let centre = SIZE as f32 / 2.0;
+    let rim = SIZE as f32 * 0.41;
+    let edge = rim + 1.0;
     for (index, pixel) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let x = (index as u32 % SIZE) as f32 + 0.5;
         let y = (index as u32 / SIZE) as f32 + 0.5;
         let distance = ((x - centre).powi(2) + (y - centre).powi(2)).sqrt();
-        if distance <= 13.0 {
+        if distance <= rim {
             pixel.copy_from_slice(&[red, green, blue, 0xff]);
-        } else if distance <= 14.0 {
+        } else if distance <= edge {
             // A half-transparent rim so the disc does not alias on HiDPI panels.
             pixel.copy_from_slice(&[red, green, blue, 0x80]);
         }
@@ -44,8 +59,12 @@ mod tests {
 
     #[test]
     fn tiers_have_distinct_pixels() {
-        assert_ne!(rgba_for_tier(Tier::Ok), rgba_for_tier(Tier::Warn));
-        assert_ne!(rgba_for_tier(Tier::Warn), rgba_for_tier(Tier::Alert));
+        // A template image is deliberately monochrome: macOS tints it, and the
+        // tier shows in the tooltip and popup instead.
+        if !TEMPLATE {
+            assert_ne!(rgba_for_tier(Tier::Ok), rgba_for_tier(Tier::Warn));
+            assert_ne!(rgba_for_tier(Tier::Warn), rgba_for_tier(Tier::Alert));
+        }
     }
 
     #[test]
