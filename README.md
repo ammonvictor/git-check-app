@@ -205,7 +205,8 @@ themselves when git is absent.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 [SECURITY.md](SECURITY.md). This project follows the
-[Contributor Covenant](CODE_OF_CONDUCT.md).
+[Contributor Covenant](CODE_OF_CONDUCT.md). Everyone who has helped is listed in
+[CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 ## License
 
