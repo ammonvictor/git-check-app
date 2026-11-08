@@ -44,11 +44,37 @@ fn configure_app() {
     if let Some(marker) = MainThreadMarker::new() {
         let app = NSApplication::sharedApplication(marker);
         app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+        // tray-icon requires the event loop to be running before a status item
+        // is created, not merely to exist.
+        app.finishLaunching();
+        for _ in 0..5 {
+            pump_run_loop();
+        }
     }
 }
 
 #[cfg(not(target_os = "macos"))]
 fn configure_app() {}
+
+/// macOS: hand AppKit a slice of run-loop time.
+///
+/// The scan/UI loop below owns the main thread, so without this the status
+/// item never lays out (its frame stays empty) and clicks are never dispatched
+/// to it — the tray appears to do nothing. Other platforms have no such loop to
+/// service; their tray backends run on their own threads.
+#[cfg(target_os = "macos")]
+fn pump_run_loop() {
+    use objc2_foundation::{NSDate, NSDefaultRunLoopMode, NSRunLoop};
+    let run_loop = NSRunLoop::currentRunLoop();
+    let until = NSDate::dateWithTimeIntervalSinceNow(0.05);
+    // SAFETY: NSDefaultRunLoopMode is an immutable framework constant.
+    unsafe {
+        run_loop.runMode_beforeDate(NSDefaultRunLoopMode, &until);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn pump_run_loop() {}
 
 fn main() {
     configure_app();
@@ -74,15 +100,23 @@ fn main() {
         }
     };
 
-    let tray = TrayIconBuilder::new()
-        .with_title("git-check")
-        .with_tooltip("git-check: scanning")
-        .with_icon(icon::for_tier(Tier::Ok))
-        .build()
-        .unwrap_or_else(|err| {
-            eprintln!("git-check-tray: cannot create the tray icon: {err}");
-            std::process::exit(1);
-        });
+    #[allow(unused_mut)]
+    let mut builder = TrayIconBuilder::new().with_tooltip("git-check: scanning");
+    // macOS tints template images for the current menu bar appearance.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.with_icon_templated(icon::for_tier(Tier::Ok));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder = builder
+            .with_icon(icon::for_tier(Tier::Ok))
+            .with_title("git-check");
+    }
+    let tray = builder.build().unwrap_or_else(|err| {
+        eprintln!("git-check-tray: cannot create the tray icon: {err}");
+        std::process::exit(1);
+    });
 
     // Keep the OS login item in step with the config on every start: this
     // creates it when enabled, removes it when disabled, and refreshes the
@@ -100,9 +134,15 @@ fn main() {
     let worker_config = config.clone();
     let worker = thread::spawn(move || worker_loop(worker_config, interval, request_rx, update_tx));
 
+    let trace = std::env::var_os("GIT_CHECK_TRAY_TRACE").is_some();
+    // Test hook: open the popup once after the first scan so the menu can be
+    // inspected without synthesising a mouse click.
+    let trace_menu = std::env::var_os("GIT_CHECK_TRAY_TRACE_MENU").is_some();
+    let mut menu_shown = false;
     let menu_events = MenuEvent::receiver();
     let mut quitting = false;
     while !quitting {
+        pump_run_loop();
         while let Ok(event) = menu_events.try_recv() {
             if event.id == ids.quit {
                 quitting = true;
@@ -134,10 +174,23 @@ fn main() {
         match update_rx.recv_timeout(Duration::from_millis(120)) {
             Ok(update) => {
                 apply(&tray, &update);
+                if trace {
+                    match tray.rect() {
+                        Some(rect) => eprintln!(
+                            "tray rect: {}x{} at {},{}",
+                            rect.size.width, rect.size.height, rect.position.x, rect.position.y
+                        ),
+                        None => eprintln!("tray rect: unavailable"),
+                    }
+                }
                 if update.snapshot.is_some() {
                     let (menu, fresh_ids) = popup::build(update.snapshot.as_ref(), launch_at_login);
                     tray.set_menu(Some(Box::new(menu)));
                     ids = fresh_ids;
+                    if trace_menu && !menu_shown {
+                        menu_shown = true;
+                        tray.show_menu();
+                    }
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}

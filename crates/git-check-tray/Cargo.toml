@@ -30,6 +30,7 @@ tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate", "NSRunLoop"] }
 
 # macOS and Windows use their native tray hosts; neither backend needs a feature.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
