@@ -19,7 +19,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -44,7 +44,7 @@ jobs:
     name: MSRV 1.85
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.85.0
       - uses: Swatinem/rust-cache@v2
       - name: Check
@@ -54,7 +54,7 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build docs
