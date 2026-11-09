@@ -39,3 +39,10 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false }
 rfd = { version = "0.17", default-features = false }
+
+# Windows needs its message queue pumped on the thread that owns the tray.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }

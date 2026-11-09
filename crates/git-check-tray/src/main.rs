@@ -97,6 +97,30 @@ fn pump_run_loop() {
 #[cfg(not(target_os = "macos"))]
 fn pump_run_loop() {}
 
+/// Windows: drain the thread's message queue.
+///
+/// `tray-icon` hosts the icon in a hidden window, so without a message pump the
+/// icon never appears and clicks are never dispatched — the same failure the
+/// macOS run loop caused.
+#[cfg(target_os = "windows")]
+fn pump_messages() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
+    };
+    // SAFETY: the queue belongs to this thread, which is the one that created
+    // the tray; no window handles are dereferenced here.
+    unsafe {
+        let mut message: MSG = std::mem::zeroed();
+        while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn pump_messages() {}
+
 /// macOS: give the status item the NSMenu itself.
 ///
 /// tray-icon normally receives clicks through a subview it installs over the
@@ -190,6 +214,9 @@ fn main() {
         log::info!("login item reconciled (launch_at_login={launch_at_login})");
     }
 
+    // Creating the queue before the tray exists mirrors the macOS launch setup.
+    pump_messages();
+
     let (menu, mut ids) = popup::build(None, launch_at_login);
     #[cfg(target_os = "macos")]
     attach_menu(&tray, &menu);
@@ -209,6 +236,7 @@ fn main() {
     let mut quitting = false;
     while !quitting {
         pump_run_loop();
+        pump_messages();
         while let Ok(event) = menu_events.try_recv() {
             if event.id == ids.quit {
                 log::info!("menu: quit");
