@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "git-check"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "git-check-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "directories",
@@ -671,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "git-check-tray"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "auto-launch",
  "chrono",

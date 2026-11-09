@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Planned
+
+- Dashboard window with SQLite-backed history and per-root rollups.
+- Watch mode.
+
+## [0.2.0] - 2026-11-09
+
+Second release: the tray application. The same engine now drives an icon, a
+native-menu popup and installers on Linux, macOS and Windows.
+
 ### Added
 
 - `git-check-tray`: a tray binary whose icon is coloured by portfolio health
@@ -22,7 +32,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Metrics popup as a native menu: the KPI line (`9 dirty · 2 unpushed · 46
   cold`), a 30-day unicode sparkline and the three worst offenders, rebuilt after
   every scan.
-
 - A per-user Windows MSI built in CI: both binaries under
   `%LOCALAPPDATA%\Programs\git-check` plus a Start Menu shortcut, no admin
   rights needed.
@@ -30,7 +39,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   binary into `git-check.app` (LSUIElement, ad-hoc signed) and a `.dmg` with an
   /Applications symlink; the release workflow builds it and `workflow_dispatch`
   can exercise it without a tag.
-
 - A "Choose folder…" tray action: a native picker (xdg-portal on Linux, so
   still GTK-free) adds a root, saves it to the config and rescans at once.
 - First run no longer latches onto an empty default root; with no repositories
@@ -43,13 +51,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - MSRV raised from 1.85 to 1.90, required by `tray-icon` 0.26's ksni backend.
-
-### Planned
-
-- Metrics popup (native menu): KPI cells, 30-day sparkline, worst-offender rows,
-  folder picker.
-- Dashboard window with charts and SQLite-backed history.
-- Installers for Linux, macOS and Windows.
 
 ## [0.1.0] - 2026-11-08
 
