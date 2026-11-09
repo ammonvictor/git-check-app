@@ -23,6 +23,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cold`), a 30-day unicode sparkline and the three worst offenders, rebuilt after
   every scan.
 
+- A per-user Windows MSI built in CI: both binaries under
+  `%LOCALAPPDATA%\Programs\git-check` plus a Start Menu shortcut, no admin
+  rights needed.
 - A macOS packaging path: `scripts/macos-bundle.sh` turns a universal tray
   binary into `git-check.app` (LSUIElement, ad-hoc signed) and a `.dmg` with an
   /Applications symlink; the release workflow builds it and `workflow_dispatch`
