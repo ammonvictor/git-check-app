@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-user MSI for git-check: installs both binaries under
+  %LOCALAPPDATA%\Programs\git-check and adds a Start Menu shortcut for the tray.
+  Built on the windows-latest runner, which ships WiX 3.14.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+      Id="*"
+      Name="git-check"
+      Language="1033"
+      Version="$(var.Version)"
+      Manufacturer="Ammon Victor"
+      UpgradeCode="17129a44-6920-4c97-a33d-aaa5097f72b3">
+
+    <Package
+        InstallerVersion="500"
+        Compressed="yes"
+        InstallScope="perUser"
+        InstallPrivileges="limited"
+        Platform="x64" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of git-check is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="git-check" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="git-check" />
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="CliExe" Guid="a294e427-a94f-4cb3-9968-4c4f893f49a9">
+        <File Id="CliExe" Source="$(var.SourceDir)\git-check.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="TrayExe" Guid="30eff45a-2796-41e1-934f-0f24d1cb14f2">
+        <File Id="TrayExe" Source="$(var.SourceDir)\git-check-tray.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="Documentation" Guid="7b3b70cb-7546-46ed-8b63-03eb292e6b87">
+        <File Id="Readme" Source="$(var.RepoRoot)\README.md" />
+        <File Id="LicenseMit" Source="$(var.RepoRoot)\LICENSE-MIT" />
+        <File Id="LicenseApache" Source="$(var.RepoRoot)\LICENSE-APACHE" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcut" Guid="8f101ffb-d3b2-43f2-a027-dba7b8f9b5fd">
+        <Shortcut
+            Id="TrayShortcut"
+            Name="git-check"
+            Description="Portfolio git health in the tray"
+            Target="[INSTALLFOLDER]git-check-tray.exe"
+            WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+            Root="HKCU"
+            Key="Software\Kwano\git-check"
+            Name="installed"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="Main" Title="git-check" Level="1">
+      <ComponentRef Id="CliExe" />
+      <ComponentRef Id="TrayExe" />
+      <ComponentRef Id="Documentation" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Product>
+</Wix>

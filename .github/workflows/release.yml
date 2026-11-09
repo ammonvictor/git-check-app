@@ -136,9 +136,38 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
+  msi:
+    name: Windows MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        run: cargo build --release --locked -p git-check -p git-check-tray
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force -Path dist, obj | Out-Null
+          $wix = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin"
+          & "$wix\candle.exe" -nologo -dVersion=$version -dSourceDir="target\release" -dRepoRoot="." -o obj\git-check.wixobj packaging\windows\git-check.wxs
+          & "$wix\light.exe" -nologo -o "dist\git-check-$version-x86_64.msi" obj\git-check.wixobj
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-msi
+          path: dist/*.msi
+          if-no-files-found: error
+
   publish:
     name: publish release
-    needs: [binaries, deb, dmg]
+    needs: [binaries, deb, dmg, msi]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
