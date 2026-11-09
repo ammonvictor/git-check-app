@@ -55,6 +55,7 @@ jobs:
           name="git-check-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "dist/$name"
           cp "target/${{ matrix.target }}/release/git-check" "dist/$name/"
+          cp "target/${{ matrix.target }}/release/git-check-tray" "dist/$name/"
           cp README.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           rm -rf "dist/$name"
@@ -66,6 +67,7 @@ jobs:
           $name = "git-check-$env:GITHUB_REF_NAME-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/git-check.exe" "dist/$name/"
+          Copy-Item "target/${{ matrix.target }}/release/git-check-tray.exe" "dist/$name/"
           Copy-Item README.md, LICENSE-MIT, LICENSE-APACHE "dist/$name/"
           Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
 
