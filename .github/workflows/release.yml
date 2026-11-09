@@ -156,7 +156,7 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
           New-Item -ItemType Directory -Force -Path dist, obj | Out-Null
           $wix = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin"
-          & "$wix\candle.exe" -nologo -dVersion=$version -dSourceDir="target\release" -dRepoRoot="." -o obj\git-check.wixobj packaging\windows\git-check.wxs
+          & "$wix\candle.exe" -nologo "-dVersion=$version" "-dSourceDir=target\release" "-dRepoRoot=." -o obj\git-check.wixobj packaging\windows\git-check.wxs
           & "$wix\light.exe" -nologo -o "dist\git-check-$version-x86_64.msi" obj\git-check.wixobj
 
       - uses: actions/upload-artifact@v7
