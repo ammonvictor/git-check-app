@@ -36,15 +36,23 @@
 
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="CliExe" Guid="a294e427-a94f-4cb3-9968-4c4f893f49a9">
-        <File Id="CliExe" Source="$(var.SourceDir)\git-check.exe" KeyPath="yes" />
+        <File Id="CliExe" Source="$(var.SourceDir)\git-check.exe" />
+        <RegistryValue Root="HKCU" Key="Software\Kwano\git-check\Components" Name="cli" Type="integer" Value="1" KeyPath="yes" />
       </Component>
       <Component Id="TrayExe" Guid="30eff45a-2796-41e1-934f-0f24d1cb14f2">
-        <File Id="TrayExe" Source="$(var.SourceDir)\git-check-tray.exe" KeyPath="yes" />
+        <File Id="TrayExe" Source="$(var.SourceDir)\git-check-tray.exe" />
+        <RegistryValue Root="HKCU" Key="Software\Kwano\git-check\Components" Name="tray" Type="integer" Value="1" KeyPath="yes" />
       </Component>
       <Component Id="Documentation" Guid="7b3b70cb-7546-46ed-8b63-03eb292e6b87">
         <File Id="Readme" Source="$(var.RepoRoot)\README.md" />
         <File Id="LicenseMit" Source="$(var.RepoRoot)\LICENSE-MIT" />
-        <File Id="LicenseApache" Source="$(var.RepoRoot)\LICENSE-APACHE" KeyPath="yes" />
+        <File Id="LicenseApache" Source="$(var.RepoRoot)\LICENSE-APACHE" />
+        <RegistryValue Root="HKCU" Key="Software\Kwano\git-check\Components" Name="docs" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="FolderCleanup" Guid="d96bb5c6-bd63-4923-8d86-11e855dc21b6">
+        <RegistryValue Root="HKCU" Key="Software\Kwano\git-check\Components" Name="folders" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
       </Component>
     </DirectoryRef>
 
@@ -71,6 +79,7 @@
       <ComponentRef Id="CliExe" />
       <ComponentRef Id="TrayExe" />
       <ComponentRef Id="Documentation" />
+      <ComponentRef Id="FolderCleanup" />
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
   </Product>
