@@ -121,7 +121,7 @@ enum RootsAction {
     },
     /// List configured roots.
     List,
-    /// Remove a root by label or path.
+    /// Remove a root by exact label or directory path.
     Remove { selector: String },
 }
 
@@ -361,6 +361,25 @@ fn print_report(portfolio: &Portfolio, duration_ms: u128, color: bool) {
     );
 }
 
+/// Indices of roots that `selector` names: an exact label, or the same
+/// directory (after `~` expansion and, where the path exists, symlink
+/// resolution). Never a substring or suffix, so `code` cannot hit `oss-code`.
+fn matching_roots(roots: &[Root], selector: &str) -> Vec<usize> {
+    let canonical = |p: &std::path::Path| {
+        let expanded = Config::expand(p);
+        expanded.canonicalize().unwrap_or(expanded)
+    };
+    let wanted = canonical(std::path::Path::new(selector));
+    roots
+        .iter()
+        .enumerate()
+        .filter(|(_, root)| {
+            root.label.as_deref() == Some(selector) || canonical(&root.path) == wanted
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
 fn roots(cli: &Cli, config: &Config, action: &RootsAction) -> Result<ExitCode> {
     let mut config = config.clone();
     let path = cli.config.clone().unwrap_or_else(Config::path);
@@ -423,21 +442,54 @@ fn roots(cli: &Cli, config: &Config, action: &RootsAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         RootsAction::Remove { selector } => {
-            let before = config.roots.len();
-            config.roots.retain(|root| {
-                let label_match = root.label.as_deref() == Some(selector.as_str());
-                let path_text = Config::expand(&root.path).to_string_lossy().into_owned();
-                let path_match = path_text == *selector || path_text.ends_with(selector.as_str());
-                !(label_match || path_match)
-            });
-            if config.roots.len() == before {
-                bail!("no root matches `{selector}` (try: git-check roots list)");
+            let matches = matching_roots(&config.roots, selector);
+            match matches.as_slice() {
+                [] => bail!("no root matches `{selector}` (try: git-check roots list)"),
+                [index] => {
+                    let removed = config.roots.remove(*index);
+                    config
+                        .save_to(&path)
+                        .with_context(|| format!("saving {}", path.display()))?;
+                    println!("Removed {}", removed.display());
+                    Ok(ExitCode::SUCCESS)
+                }
+                many => {
+                    let names: Vec<String> =
+                        many.iter().map(|i| config.roots[*i].display()).collect();
+                    bail!(
+                        "`{selector}` matches {} roots ({}); give the full path instead",
+                        many.len(),
+                        names.join(", ")
+                    )
+                }
             }
-            config
-                .save_to(&path)
-                .with_context(|| format!("saving {}", path.display()))?;
-            println!("Removed {selector}");
-            Ok(ExitCode::SUCCESS)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_matches_labels_and_whole_paths_only() {
+        let roots = vec![
+            Root::new("/home/you/code", 3, None),
+            Root::new("/home/you/oss-code", 2, Some("oss".to_string())),
+        ];
+        assert_eq!(matching_roots(&roots, "/home/you/code"), vec![0]);
+        assert_eq!(matching_roots(&roots, "oss"), vec![1]);
+        // A suffix of both paths used to remove both.
+        assert!(matching_roots(&roots, "code").is_empty());
+        assert!(matching_roots(&roots, "de").is_empty());
+    }
+
+    #[test]
+    fn duplicate_labels_are_reported_not_guessed() {
+        let roots = vec![
+            Root::new("/a", 1, Some("work".to_string())),
+            Root::new("/b", 1, Some("work".to_string())),
+        ];
+        assert_eq!(matching_roots(&roots, "work"), vec![0, 1]);
     }
 }

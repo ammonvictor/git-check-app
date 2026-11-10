@@ -10,6 +10,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Commit totals, the 30-day trend and the streak count each commit once. Linked
   worktrees and duplicate clones no longer double-count shared history.
+- `git-check roots remove` matches an exact label or the same directory only.
+  The old suffix match let `remove code` also remove `/home/you/oss-code`; a
+  selector that matches several roots is now an error that lists them.
 
 ### Security
 
