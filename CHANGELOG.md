@@ -15,9 +15,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.0] - 2026-11-10
 
-Third release: security hardening, correct commit totals, and safer config
-handling. There are no new features; the numbers and the exit code are now
-honest.
+Third release: security hardening, correct commit totals, safer config handling,
+and a report that agrees with the tray. The numbers, units and exit code are now
+consistent.
+
+### Added
+
+- One attention model used by the report, tray tier, exit code and summary:
+  **alert** (conflict or unreadable), **warn** (dirty, unpushed, detached) and
+  **quiet** (behind, stashed, cold, no upstream). Quiet repositories are listed
+  by name under a `quiet` heading but do not fail `--exit-code`.
+- Duplicate folder names in the report are disambiguated with their parent
+  directory (`api (oss)`, `api (work)`).
+- `stashed_repos` in `--json`, so repository-level stash counts are available
+  without summing per-repo values.
+
+### Changed
+
+- Header, tooltip and popup counts are repository counts throughout. Previously
+  `unpushed` and `behind` showed commit counts while `dirty` and `cold` showed
+  repositories. Per-repository rows still show path and commit detail, and the
+  dirty-path flag now reads `N changed`.
+- `--exit-code` also fails when a path could not be read during discovery, and
+  the report says how many.
+- "All N repos clean and pushed" is printed only when there are no quiet
+  repositories and no unreadable paths.
 
 ### Fixed
 
@@ -33,6 +55,8 @@ honest.
   spelled (`~`, trailing `.`, symlinks).
 - `--exit-code` also fails when a repository could not be read, matching the
   tray's alert state.
+- Cold, stash-only and no-upstream repositories are no longer invisible, and the
+  all-clean line no longer claims they are pushed.
 
 ### Security
 

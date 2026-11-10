@@ -56,25 +56,38 @@ git-check --root ~/code --exit-code
 ## What the report means
 
 ```
-git-check  61 repos · 8 dirty · 6 cold  230 ms
+git-check  61 repos · 8 dirty · 1 unpushed · 3 behind · 6 cold  230 ms
 
-  career-advisor         66 dirty
-  deepseek-harness-demo  5 dirty
+  career-advisor         66 changed
+  deepseek-harness-demo  5 changed
   ...
-  kwano-platform         1 dirty
+  kwano-platform         1 changed
 
-  6 without an upstream branch
+quiet
+  old-site               cold 120d
+  scratch                no upstream
 
 8 of 61 repos need attention.
+2 more are quiet (behind, stashed, cold, or without an upstream).
 ```
+
+Repositories fall into three attention levels; the header counts repositories,
+while rows describe the repository they belong to.
+
+| Level | Meaning | `--exit-code` |
+| --- | --- | --- |
+| **alert** | a conflict, or git could not read the repository | fails |
+| **warn** | dirty, unpushed, or detached | fails |
+| **quiet** | behind, stashed, cold, or without an upstream | listed by name, does not fail |
 
 | Term | Meaning |
 | --- | --- |
-| **dirty** | changed paths: staged, unstaged, untracked or conflicted |
-| **unpushed** | local commits ahead of the branch's upstream (never fetches) |
-| **behind** | upstream commits the local branch does not have |
-| **cold** | last commit older than `stale_after_days` (default 30) |
-| **no upstream** | current branch has no remote-tracking branch |
+| **dirty** | a repository with changed paths (the header counts repositories) |
+| **changed** | staged, unstaged, untracked or conflicted paths inside a repository |
+| **unpushed** | a repository with local commits ahead of its upstream (never fetches) |
+| **behind** | a repository whose upstream has commits it does not have |
+| **cold** | a repository whose last commit is older than `stale_after_days` (default 30) |
+| **no upstream** | the current branch has no remote-tracking branch |
 
 `unpushed` and `behind` reflect the **last known** remote-tracking refs.
 git-check never runs `git fetch`: no network, no credentials, no surprise
@@ -152,7 +165,7 @@ project does not inflate the totals.
 | Code | Meaning |
 | --- | --- |
 | 0 | scan completed (and, with `--exit-code`, nothing needs attention) |
-| 1 | `--exit-code` and something is dirty / unpushed / conflicting, or a repository could not be read |
+| 1 | `--exit-code` and something needs attention: dirty, unpushed, detached, conflicted, an unreadable repository, or a path that could not be read |
 | 2 | usage or configuration error |
 
 ## Design notes
