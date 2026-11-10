@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use super::{Depth, Inspector, RepoStatus, ScanCtx};
+use super::{Commit, Depth, Inspector, RepoStatus, ScanCtx};
 
 pub struct CliInspector;
 
@@ -147,6 +147,15 @@ fn iso(ts: i64) -> String {
         .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
 }
 
+/// Parse one `%H %ct` line from `git log`.
+fn parse_commit_line(line: &str) -> Option<Commit> {
+    let (id, ts) = line.trim().split_once(' ')?;
+    Some(Commit {
+        id: id.to_string(),
+        ts: ts.trim().parse().ok()?,
+    })
+}
+
 impl Inspector for CliInspector {
     fn inspect(&self, path: &Path, ctx: &ScanCtx) -> RepoStatus {
         let mut status = RepoStatus::new(path);
@@ -255,10 +264,13 @@ impl Inspector for CliInspector {
 
         if let Some(ts) = status.last_commit_ts {
             let since = iso(ctx.since.min(ts));
-            if let Ok(stdout) = git(path, &["log", &format!("--since={since}"), "--format=%ct"]) {
-                status.commit_ts = String::from_utf8_lossy(&stdout)
+            if let Ok(stdout) = git(
+                path,
+                &["log", &format!("--since={since}"), "--format=%H %ct"],
+            ) {
+                status.commits = String::from_utf8_lossy(&stdout)
                     .lines()
-                    .filter_map(|line| line.trim().parse::<i64>().ok())
+                    .filter_map(parse_commit_line)
                     .collect();
             }
         }

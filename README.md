@@ -143,7 +143,9 @@ launch_at_login = false
 ```
 
 `commits_since(n) == sum(trend_n)` by construction: both use the same day-aligned
-window, so the headline number always matches the chart underneath it.
+window, so the headline number always matches the chart underneath it. Commits
+are counted once by id, so a linked worktree or a second clone of the same
+project does not inflate the totals.
 
 ## Exit codes
 

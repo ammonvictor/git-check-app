@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Commit totals, the 30-day trend and the streak count each commit once. Linked
+  worktrees and duplicate clones no longer double-count shared history.
+
 ### Security
 
 - Every git call passes `-c core.fsmonitor=false -c log.showSignature=false`.

@@ -32,7 +32,7 @@ impl Backend {
 pub enum Depth {
     /// Working-tree state and ahead/behind only: enough for a tray icon.
     Quick,
-    /// Adds last commit, 90-day commit history, stashes and remote presence.
+    /// Adds last commit, 12-month commit history, stashes and remote presence.
     Full,
 }
 
@@ -42,6 +42,16 @@ pub struct ScanCtx {
     /// Lower bound (unix seconds) for the commit-history window.
     pub since: i64,
     pub depth: Depth,
+}
+
+/// One commit in a repository's history window.
+///
+/// The id lets portfolio metrics count a commit once even when several
+/// checkouts share it (linked worktrees, duplicate clones of one project).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    pub id: String,
+    pub ts: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -68,8 +78,9 @@ pub struct RepoStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_commit_ts: Option<i64>,
     pub last_subject: String,
+    /// Commits reachable from HEAD inside the history window.
     #[serde(skip)]
-    pub commit_ts: Vec<i64>,
+    pub commits: Vec<Commit>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }

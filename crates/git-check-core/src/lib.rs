@@ -11,7 +11,7 @@ pub mod metrics;
 
 pub use config::{Config, Root};
 pub use error::{Error, Result};
-pub use inspect::{Backend, Depth, RepoStatus};
+pub use inspect::{Backend, Commit, Depth, RepoStatus};
 pub use metrics::Portfolio;
 
 /// One complete inspection run over the configured roots.

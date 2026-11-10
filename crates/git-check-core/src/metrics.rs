@@ -1,5 +1,7 @@
 //! Portfolio-level aggregation.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
 
 use crate::inspect::RepoStatus;
@@ -110,41 +112,55 @@ impl Portfolio {
         (today - (days - 1).max(0)) * 86_400
     }
 
-    /// Commits reachable from HEAD within the last `days` whole UTC days.
+    /// Timestamps of every distinct commit in the portfolio.
+    ///
+    /// A linked worktree and its main checkout (or two clones of one project)
+    /// report largely the same history; keying on the commit id counts each
+    /// commit once however many checkouts reach it.
+    fn unique_commit_ts(&self) -> Vec<i64> {
+        let mut seen: HashSet<&str> = HashSet::new();
+        self.repos
+            .iter()
+            .flat_map(|r| r.commits.iter())
+            .filter(|c| seen.insert(c.id.as_str()))
+            .map(|c| c.ts)
+            .collect()
+    }
+
+    /// Distinct commits reachable from HEAD within the last `days` whole UTC days.
     ///
     /// Day-aligned on purpose: `commits_since(n) == daily_commits(n).sum()`, so
     /// the headline number always matches the chart underneath it.
     pub fn commits_since(&self, days: i64) -> usize {
         let cutoff = self.day_cutoff(days);
-        self.repos
-            .iter()
-            .flat_map(|r| r.commit_ts.iter())
-            .filter(|ts| **ts >= cutoff)
+        self.unique_commit_ts()
+            .into_iter()
+            .filter(|ts| *ts >= cutoff)
             .count()
     }
 
+    /// Checkouts with at least one commit in the window. Worktrees count apart:
+    /// each is a place where work happened.
     pub fn active_repos(&self, days: i64) -> usize {
         let cutoff = self.day_cutoff(days);
         self.repos
             .iter()
-            .filter(|r| r.commit_ts.iter().any(|ts| *ts >= cutoff))
+            .filter(|r| r.commits.iter().any(|c| c.ts >= cutoff))
             .count()
     }
 
-    /// Commits per UTC day for the last `days` days, oldest first.
+    /// Distinct commits per UTC day for the last `days` days, oldest first.
     pub fn daily_commits(&self, days: usize) -> Vec<usize> {
         let days = days.max(1);
         let today = self.generated_at.div_euclid(86_400);
         let start = today - (days as i64 - 1);
         let mut buckets = vec![0usize; days];
-        for repo in &self.repos {
-            for ts in &repo.commit_ts {
-                let day = ts.div_euclid(86_400);
-                if day >= start {
-                    let idx = (day - start) as usize;
-                    if idx < days {
-                        buckets[idx] += 1;
-                    }
+        for ts in self.unique_commit_ts() {
+            let day = ts.div_euclid(86_400);
+            if day >= start {
+                let idx = (day - start) as usize;
+                if idx < days {
+                    buckets[idx] += 1;
                 }
             }
         }
@@ -233,5 +249,39 @@ impl Portfolio {
             "discovery_errors": discovery_errors,
             "repos": repos,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inspect::Commit;
+
+    fn repo(name: &str, commits: &[(&str, i64)]) -> RepoStatus {
+        RepoStatus {
+            name: name.to_string(),
+            commits: commits
+                .iter()
+                .map(|(id, ts)| Commit {
+                    id: id.to_string(),
+                    ts: *ts,
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn shared_commits_are_counted_once() {
+        let now = 100 * 86_400 + 3_600;
+        // A main checkout and its worktree share `a` and `b`; the worktree
+        // branch adds `c`. Three distinct commits, not five.
+        let main = repo("proj", &[("a", now - 10), ("b", now - 20)]);
+        let worktree = repo("wt", &[("c", now - 5), ("a", now - 10), ("b", now - 20)]);
+        let portfolio = Portfolio::new(vec![main, worktree], now, 30);
+
+        assert_eq!(portfolio.commits_since(7), 3);
+        assert_eq!(portfolio.daily_commits(7).iter().sum::<usize>(), 3);
+        assert_eq!(portfolio.active_repos(7), 2, "both checkouts saw work");
     }
 }

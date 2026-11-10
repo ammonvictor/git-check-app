@@ -505,3 +505,38 @@ fn per_worktree_config_filters_are_also_refused() {
         "git-check ran the repository's per-worktree content filter"
     );
 }
+
+#[test]
+fn a_worktree_does_not_double_the_commit_count() {
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+    commit(&repo, "README.md", "second\n", "second");
+    let worktree = tmp.path().join("wt");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feature",
+            worktree.to_str().unwrap(),
+        ],
+    );
+    commit(&worktree, "feature.txt", "f\n", "feature work");
+
+    let now = chrono::Utc::now().timestamp();
+    let alone = Portfolio::new(vec![inspect_one(&repo)], now, 30);
+    let both = Portfolio::new(vec![inspect_one(&repo), inspect_one(&worktree)], now, 30);
+
+    assert_eq!(alone.commits_since(7), 2, "initial + second");
+    assert_eq!(
+        both.commits_since(7),
+        3,
+        "shared history once, plus the worktree's own commit"
+    );
+}
