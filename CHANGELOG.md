@@ -13,6 +13,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `git-check roots remove` matches an exact label or the same directory only.
   The old suffix match let `remove code` also remove `/home/you/oss-code`; a
   selector that matches several roots is now an error that lists them.
+- The tray re-reads the config before saving, so roots added with the CLI or an
+  editor while it runs are no longer overwritten. A config file that does not
+  parse is reported instead of replaced.
+- The tray's "Choose folder…" recognises an existing root however its path is
+  spelled (`~`, trailing `.`, symlinks).
 
 ### Security
 

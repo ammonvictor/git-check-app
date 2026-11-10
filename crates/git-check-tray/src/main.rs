@@ -149,7 +149,7 @@ fn main() {
     configure_app();
     let log_path = logging::init();
 
-    let mut config = match Config::load() {
+    let config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
             log::error!("cannot load the config: {err}");
@@ -250,18 +250,24 @@ fn main() {
             if event.id == ids.choose {
                 log::info!("menu: choose folder");
                 if let Some(folder) = choose_folder() {
-                    if config.roots.iter().any(|root| root.path == folder) {
-                        log::info!("{} is already a root", folder.display());
-                    } else {
-                        config.roots.push(Root::new(folder.clone(), 3, None));
-                        match config.save() {
-                            Ok(()) => log::info!("added root {}", folder.display()),
-                            Err(err) => {
-                                log::error!("cannot save the config: {err}");
-                                eprintln!("git-check-tray: cannot save the config: {err}");
-                            }
+                    let result = update_config(&Config::path(), |fresh| {
+                        if has_root(fresh, &folder) {
+                            false
+                        } else {
+                            fresh.roots.push(Root::new(folder.clone(), 3, None));
+                            true
                         }
-                        let _ = request_tx.send(Request::Config(Box::new(config.clone())));
+                    });
+                    match result {
+                        Ok(Some(fresh)) => {
+                            log::info!("added root {}", folder.display());
+                            let _ = request_tx.send(Request::Config(Box::new(fresh)));
+                        }
+                        Ok(None) => log::info!("{} is already a root", folder.display()),
+                        Err(err) => {
+                            log::error!("cannot update the config: {err}");
+                            eprintln!("git-check-tray: cannot update the config: {err}");
+                        }
                     }
                 }
             }
@@ -270,11 +276,17 @@ fn main() {
                 match autostart::apply(wanted) {
                     Ok(()) => {
                         launch_at_login = wanted;
-                        config.launch_at_login = wanted;
                         log::info!("launch at login set to {wanted}");
-                        if let Err(err) = config.save() {
-                            log::warn!("cannot save the config: {err}");
-                            eprintln!("git-check-tray: cannot save the config: {err}");
+                        // Reload before saving: the file may have changed since
+                        // startup, and an unparseable file must not be replaced.
+                        let result = update_config(&Config::path(), |fresh| {
+                            let changed = fresh.launch_at_login != wanted;
+                            fresh.launch_at_login = wanted;
+                            changed
+                        });
+                        if let Err(err) = result {
+                            log::warn!("cannot update the config: {err}");
+                            eprintln!("git-check-tray: cannot update the config: {err}");
                         }
                     }
                     Err(err) => {
@@ -319,6 +331,39 @@ fn main() {
 
     let _ = request_tx.send(Request::Quit);
     let _ = worker.join();
+}
+
+/// Apply one change to the config **as it is on disk now**, then save it.
+///
+/// The tray runs for days; the CLI (`git-check roots add`) or a text editor may
+/// change the file meanwhile. Saving the copy loaded at startup would silently
+/// undo those edits, so every write re-reads first. `change` returns whether it
+/// modified anything; `Ok(None)` means there was nothing to save. A file that
+/// no longer parses is reported, never overwritten.
+fn update_config(
+    path: &Path,
+    change: impl FnOnce(&mut Config) -> bool,
+) -> git_check_core::Result<Option<Config>> {
+    let mut fresh = Config::load_from(path)?;
+    if !change(&mut fresh) {
+        return Ok(None);
+    }
+    fresh.save_to(path)?;
+    Ok(Some(fresh))
+}
+
+/// Whether `folder` is already a root, comparing resolved paths so `~/code`
+/// and `/home/you/code` (or a symlink to it) count as the same root.
+fn has_root(config: &Config, folder: &Path) -> bool {
+    let resolve = |p: &Path| {
+        let expanded = Config::expand(p);
+        expanded.canonicalize().unwrap_or(expanded)
+    };
+    let wanted = resolve(folder);
+    config
+        .roots
+        .iter()
+        .any(|root| resolve(&root.path) == wanted)
 }
 
 /// Native folder chooser; returns None when the user cancels.
@@ -449,6 +494,69 @@ mod tests {
         drop(first);
         let third = acquire_lock_in(&dir).expect("lock is released with the first instance");
         drop(third);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("git-check-tray-cfg-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn saving_keeps_edits_made_while_the_tray_ran() {
+        let dir = scratch("keep");
+        let path = dir.join("config.toml");
+        let startup = Config {
+            roots: vec![Root::new("/a", 1, None)],
+            ..Config::default()
+        };
+        startup.save_to(&path).unwrap();
+
+        // Meanwhile, `git-check roots add /b` writes the file.
+        let mut external = Config::load_from(&path).unwrap();
+        external.roots.push(Root::new("/b", 1, None));
+        external.save_to(&path).unwrap();
+
+        // The tray toggles launch at login from its stale in-memory copy.
+        let saved = update_config(&path, |fresh| {
+            fresh.launch_at_login = true;
+            true
+        })
+        .unwrap()
+        .expect("changed");
+
+        let on_disk = Config::load_from(&path).unwrap();
+        assert!(on_disk.launch_at_login);
+        assert_eq!(on_disk.roots.len(), 2, "the externally added root survives");
+        assert_eq!(saved.roots, on_disk.roots);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_unparseable_file_is_not_overwritten() {
+        let dir = scratch("broken");
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "roots = [ half-typed").unwrap();
+        assert!(update_config(&path, |_| true).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "roots = [ half-typed"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_same_folder_is_recognised_however_it_is_spelled() {
+        let dir = scratch("same");
+        let config = Config {
+            roots: vec![Root::new(&dir, 3, None)],
+            ..Config::default()
+        };
+        assert!(has_root(&config, &dir.join(".")));
+        assert!(!has_root(&config, &dir.join("other")));
         let _ = std::fs::remove_dir_all(dir);
     }
 }
