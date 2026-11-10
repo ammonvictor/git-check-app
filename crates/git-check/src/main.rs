@@ -86,7 +86,8 @@ struct Cli {
     #[arg(long, global = true)]
     no_color: bool,
 
-    /// Exit with status 1 when anything needs attention (dirty, unpushed, conflict).
+    /// Exit with status 1 when anything needs attention (dirty, unpushed,
+    /// conflict, or a repository git could not read).
     #[arg(long, global = true)]
     exit_code: bool,
 
@@ -232,8 +233,7 @@ fn report(cli: &Cli, config: &Config, color: bool) -> Result<ExitCode> {
         print_report(&portfolio, duration_ms, color);
     }
 
-    let attention = counters.dirty_repos > 0 || counters.ahead_repos > 0 || counters.conflicts > 0;
-    if cli.exit_code && attention {
+    if cli.exit_code && counters.needs_attention() {
         return Ok(ExitCode::from(1));
     }
     Ok(ExitCode::SUCCESS)

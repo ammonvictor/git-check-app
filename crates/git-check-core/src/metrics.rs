@@ -46,6 +46,14 @@ pub struct Counters {
     pub active_repos_7d: usize,
 }
 
+impl Counters {
+    /// Whether anything needs the user: dirty, unpushed, conflicted, or a repo
+    /// git could not read. `--exit-code` and the tray tier agree on this.
+    pub fn needs_attention(&self) -> bool {
+        self.dirty_repos > 0 || self.ahead_repos > 0 || self.conflicts > 0 || self.errors > 0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Portfolio {
     pub repos: Vec<RepoStatus>,
@@ -283,5 +291,16 @@ mod tests {
         assert_eq!(portfolio.commits_since(7), 3);
         assert_eq!(portfolio.daily_commits(7).iter().sum::<usize>(), 3);
         assert_eq!(portfolio.active_repos(7), 2, "both checkouts saw work");
+    }
+
+    #[test]
+    fn unreadable_repos_need_attention() {
+        let clean = Counters::default();
+        assert!(!clean.needs_attention());
+        let errored = Counters {
+            errors: 1,
+            ..Default::default()
+        };
+        assert!(errored.needs_attention());
     }
 }

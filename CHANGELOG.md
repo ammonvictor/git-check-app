@@ -18,6 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parse is reported instead of replaced.
 - The tray's "Choose folder…" recognises an existing root however its path is
   spelled (`~`, trailing `.`, symlinks).
+- `--exit-code` also fails when a repository could not be read, matching the
+  tray's alert state.
 
 ### Security
 

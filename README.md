@@ -152,7 +152,7 @@ project does not inflate the totals.
 | Code | Meaning |
 | --- | --- |
 | 0 | scan completed (and, with `--exit-code`, nothing needs attention) |
-| 1 | `--exit-code` and something is dirty / unpushed / conflicting |
+| 1 | `--exit-code` and something is dirty / unpushed / conflicting, or a repository could not be read |
 | 2 | usage or configuration error |
 
 ## Design notes
