@@ -212,7 +212,7 @@ to run.
 | Milestone | Scope | State |
 | --- | --- | --- |
 | **M1** | tray icon, metrics popup, scan loop, launch at login | **done** |
-| **M1.5** | hardening: untrusted repo config, exact roots, config reload, honest exit codes, one attention model | **0.3.0** |
+| **M1.5** | hardening: untrusted repo config, exact roots, config reload, honest exit codes, one attention model | **done (0.3.0)** |
 | **M2a** | repository state history: dirty/ahead/behind durations and daily rollups | next |
 | **M2b** | history in the native menu ("dirty 9d", "unpushed since Tue") | next |
 | **M2c** | dashboard window with charts and per-root rollups | later |
@@ -222,7 +222,7 @@ to run.
 
 The installable MVP — **M1 plus the packaging half of M4** — is complete: a tray
 icon with its metrics popup, installable on Linux, macOS and Windows. The 0.3.0
-line hardens that surface before history work starts. The next useful question is
+release hardened that surface and made the report agree with the tray. The next useful question is
 not "what needs attention now?" but "what has needed it for nine days?", and that
 needs state rather than charts; the dashboard comes after the data exists, and
 watch mode after that.
