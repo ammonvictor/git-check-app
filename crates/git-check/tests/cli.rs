@@ -162,10 +162,16 @@ fn header_counts_repos_not_commits() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    git(tmp.path(), &["init", "-q", "--bare", "remote.git"]);
+    git(
+        tmp.path(),
+        &["init", "-q", "--bare", "-b", "main", "remote.git"],
+    );
     git(tmp.path(), &["clone", "-q", "remote.git", "work"]);
     let work = tmp.path().join("work");
     configure(&work);
+    // A runner without a global init.defaultBranch leaves the empty clone on
+    // master; name the branch explicitly so the upstream is main.
+    git(&work, &["symbolic-ref", "HEAD", "refs/heads/main"]);
 
     commit(&work, "a.txt", "one\n", "one");
     git(&work, &["push", "-q", "-u", "origin", "main"]);
