@@ -286,3 +286,222 @@ fn portfolio_counters_and_day_alignment() {
     assert!(counters.commits_7d >= 2, "two commits today");
     assert_eq!(portfolio.tier(), git_check_core::metrics::Tier::Warn);
 }
+
+/// A repository's own config must not be able to run programs during a scan.
+#[cfg(unix)]
+#[test]
+fn repo_configured_fsmonitor_is_never_executed() {
+    use std::os::unix::fs::PermissionsExt;
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+
+    let marker = tmp.path().join("hook-ran");
+    let hook = tmp.path().join("fsmonitor.sh");
+    std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(&repo, &["config", "core.fsmonitor", hook.to_str().unwrap()]);
+
+    let status = inspect_one(&repo);
+    assert!(status.error.is_none(), "error: {:?}", status.error);
+    assert!(
+        !marker.exists(),
+        "git-check ran the repository's core.fsmonitor hook"
+    );
+}
+
+/// A content filter in `.git/config` is refused before `git status` can run it.
+#[cfg(unix)]
+#[test]
+fn repo_configured_content_filter_is_refused_and_not_executed() {
+    use std::os::unix::fs::PermissionsExt;
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+
+    // Select the driver before it is configured, so setup itself cannot run it.
+    commit(
+        &repo,
+        ".gitattributes",
+        "*.txt filter=pwn\n",
+        "select filter",
+    );
+    commit(&repo, "a.txt", "hello\n", "add text file");
+
+    let marker = tmp.path().join("filter-ran");
+    let script = tmp.path().join("filter.sh");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\ntouch '{}'\ncat\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(
+        &repo,
+        &["config", "filter.pwn.clean", script.to_str().unwrap()],
+    );
+
+    let status = inspect_one(&repo);
+    let err = status.error.expect("the filter should be refused");
+    assert!(err.contains("content filter"), "unexpected error: {err}");
+    assert!(
+        err.contains("pwn"),
+        "the driver name should be reported: {err}"
+    );
+    assert!(
+        !marker.exists(),
+        "git-check ran the repository's content filter"
+    );
+}
+
+/// `include.path` is just as untrusted as the main config file.
+#[cfg(unix)]
+#[test]
+fn included_config_filters_are_also_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+
+    let script = tmp.path().join("included.sh");
+    std::fs::write(&script, "#!/bin/sh\ncat\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let included = tmp.path().join("included.cfg");
+    std::fs::write(
+        &included,
+        format!("[filter \"inc\"]\n\tclean = {}\n", script.display()),
+    )
+    .unwrap();
+    git(
+        &repo,
+        &["config", "include.path", included.to_str().unwrap()],
+    );
+
+    let status = inspect_one(&repo);
+    let err = status.error.expect("the included filter should be refused");
+    assert!(err.contains("content filter"), "unexpected error: {err}");
+    assert!(
+        err.contains("inc"),
+        "the driver name should be reported: {err}"
+    );
+}
+
+/// `log.showSignature` makes `git log` run `gpg.program` from the repository's
+/// config; a crafted signed commit must not be able to trigger it.
+#[cfg(unix)]
+#[test]
+fn repo_configured_gpg_program_is_never_executed() {
+    use std::os::unix::fs::PermissionsExt;
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+
+    let marker = tmp.path().join("gpg-ran");
+    let fakegpg = tmp.path().join("fakegpg.sh");
+    std::fs::write(
+        &fakegpg,
+        format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fakegpg, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(&repo, &["config", "log.showSignature", "true"]);
+    git(&repo, &["config", "gpg.program", fakegpg.to_str().unwrap()]);
+
+    // git only runs gpg when the commit carries a signature header.
+    let tree = git(&repo, &["write-tree"]);
+    let parent = git(&repo, &["rev-parse", "HEAD"]);
+    let raw = format!(
+        "tree {tree}\nparent {parent}\n\
+         author Test <test@example.com> 1700000000 +0000\n\
+         committer Test <test@example.com> 1700000000 +0000\n\
+         gpgsig -----BEGIN PGP SIGNATURE-----\n \n fakesig\n \
+         -----END PGP SIGNATURE-----\n\nsigned\n"
+    );
+    let raw_path = tmp.path().join("commit.txt");
+    std::fs::write(&raw_path, raw).unwrap();
+    let commit = git(
+        &repo,
+        &[
+            "hash-object",
+            "-t",
+            "commit",
+            "-w",
+            raw_path.to_str().unwrap(),
+        ],
+    );
+    git(&repo, &["update-ref", "refs/heads/main", commit.trim()]);
+
+    let status = inspect_one(&repo);
+    assert!(status.error.is_none(), "error: {:?}", status.error);
+    assert!(
+        !marker.exists(),
+        "git-check ran the repository's gpg.program"
+    );
+}
+
+/// `extensions.worktreeConfig` moves filters into `config.worktree`, which
+/// `--local` does not read but `git status` does.
+#[cfg(unix)]
+#[test]
+fn per_worktree_config_filters_are_also_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    if !git_available() {
+        eprintln!("skipping: git not available");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = repo_with_remote(tmp.path());
+    // An empty value is true, as with git's other booleans; that form used to
+    // slip past a naive `== "true"` check.
+    git(&repo, &["config", "extensions.worktreeConfig", ""]);
+
+    commit(
+        &repo,
+        ".gitattributes",
+        "*.txt filter=wtpwn\n",
+        "select filter",
+    );
+    commit(&repo, "a.txt", "hello\n", "add text file");
+
+    let marker = tmp.path().join("worktree-filter-ran");
+    let script = tmp.path().join("worktree-filter.sh");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\ntouch '{}'\ncat\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    git(
+        &repo,
+        &[
+            "config",
+            "--worktree",
+            "filter.wtpwn.clean",
+            script.to_str().unwrap(),
+        ],
+    );
+
+    let status = inspect_one(&repo);
+    let err = status.error.expect("the worktree filter should be refused");
+    assert!(err.contains("content filter"), "unexpected error: {err}");
+    assert!(
+        err.contains("wtpwn"),
+        "the driver name should be reported: {err}"
+    );
+    assert!(
+        !marker.exists(),
+        "git-check ran the repository's per-worktree content filter"
+    );
+}

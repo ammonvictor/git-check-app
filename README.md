@@ -166,6 +166,10 @@ window, so the headline number always matches the chart underneath it.
 - **The backend is behind a trait** (`Inspector`). The `git` CLI backend shipped
   in 0.1.0; an in-process libgit2 backend will follow for Windows process-spawn
   cost and richer status data.
+- **Repository-local config is untrusted.** fsmonitor and signature verification
+  are disabled on every git call, and a repository that defines content filters
+  in its own config is reported rather than inspected (see
+  [SECURITY.md](SECURITY.md)).
 
 ## Logs
 
@@ -180,6 +184,8 @@ with three archives kept. `GIT_CHECK_LOG=debug` (or `trace`) raises verbosity an
 - Untracked directories are counted as git reports them
   (`--untracked-files=normal`), not file by file.
 - Bare repositories are not reported (they have no working tree).
+- A repository that defines content filters in its own config is reported, not
+  inspected (see [SECURITY.md](SECURITY.md)).
 - Commit history window is 12 months; `streak_days` is bounded by it.
 - `--backend libgit2` is not built in this release and exits with a clear error.
 

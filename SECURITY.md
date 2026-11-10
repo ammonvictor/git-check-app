@@ -6,7 +6,7 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | yes |
+| 0.2.x | yes |
 | older | no |
 
 ## Reporting a vulnerability
@@ -30,8 +30,19 @@ Worth knowing when you assess a report:
 - It executes the `git` binary found in `PATH`. Anything that controls `PATH`
   controls what runs — that is a property of every git front end, not a flaw in
   this one.
-- It runs no build scripts from the repositories it inspects and does not execute
-  hooks.
+- It runs no build scripts from the repositories it inspects. It runs no git
+  hooks and does not verify commit signatures during a scan: every git call
+  passes `-c core.fsmonitor=false -c log.showSignature=false`, because
+  `git status` and `git log` otherwise run programs named in the repository's
+  `.git/config` (`core.fsmonitor`, `gpg.program`).
+- A repository whose local config defines a content filter — `filter.*.clean`,
+  `.smudge` or `.process`, including one pulled in through `include.path` — is
+  reported and **not inspected**. `git status` would otherwise run that program
+  while comparing a file. If you trust such a repository, remove the local filter
+  config or inspect it with plain `git`.
+- If you find another config key that makes `git status`, `git log` or
+  `git stash list` run a program, report it; that is exactly the class of issue
+  this section is about.
 - Git inspection uses `--no-optional-locks`, so it cannot leave a stale
   `index.lock` behind.
 - It writes only to its own config and state directories

@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Every git call passes `-c core.fsmonitor=false -c log.showSignature=false`.
+  Previously a repository's `.git/config` could name a program that `git status`
+  or `git log` ran on every scan, including every tray rescan.
+- A repository whose local config defines a content filter (`filter.*.clean`,
+  `.smudge` or `.process`, including one pulled in through `include.path`) is now
+  reported and not inspected: `git status` would otherwise run that program while
+  comparing a file.
+
 ### Planned
 
 - Dashboard window with SQLite-backed history and per-root rollups.
