@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use serde::Serialize;
 
-use crate::inspect::RepoStatus;
+use crate::inspect::{Attention, RepoStatus};
 
 /// Health tier driving the tray icon colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +36,7 @@ pub struct Counters {
     pub behind_commits: usize,
     pub conflicts: usize,
     pub stashes: usize,
+    pub stashed_repos: usize,
     pub no_upstream: usize,
     pub detached: usize,
     pub errors: usize,
@@ -47,10 +48,24 @@ pub struct Counters {
 }
 
 impl Counters {
-    /// Whether anything needs the user: dirty, unpushed, conflicted, or a repo
-    /// git could not read. `--exit-code` and the tray tier agree on this.
+    /// Health tier driving the tray icon colour.
+    ///
+    /// `Alert` is a conflict or an unreadable repo; `Warn` is dirty, unpushed or
+    /// detached. Quiet states (behind, stashed, cold, no upstream) stay `Ok`.
+    pub fn tier(&self) -> Tier {
+        if self.conflicts > 0 || self.errors > 0 {
+            Tier::Alert
+        } else if self.dirty_repos > 0 || self.ahead_repos > 0 || self.detached > 0 {
+            Tier::Warn
+        } else {
+            Tier::Ok
+        }
+    }
+
+    /// Whether anything needs action: the same set that turns the tray yellow
+    /// or red. Quiet states deliberately do not count.
     pub fn needs_attention(&self) -> bool {
-        self.dirty_repos > 0 || self.ahead_repos > 0 || self.conflicts > 0 || self.errors > 0
+        self.tier() != Tier::Ok
     }
 }
 
@@ -90,6 +105,9 @@ impl Portfolio {
             c.behind_commits += repo.behind;
             if repo.conflicted > 0 {
                 c.conflicts += 1;
+            }
+            if repo.stashes > 0 {
+                c.stashed_repos += 1;
             }
             c.stashes += repo.stashes;
             if !repo.has_upstream() {
@@ -193,22 +211,40 @@ impl Portfolio {
         run
     }
 
-    /// Problem repositories, worst first.
+    /// Repositories that need action (warn or alert), worst first.
     pub fn ranked(&self) -> Vec<&RepoStatus> {
-        let mut rows: Vec<&RepoStatus> = self.repos.iter().filter(|r| r.score() > 0).collect();
+        let mut rows: Vec<&RepoStatus> = self
+            .repos
+            .iter()
+            .filter(|r| self.attention(r) >= Attention::Warn)
+            .collect();
+        rows.sort_by(|a, b| {
+            self.attention(b)
+                .cmp(&self.attention(a))
+                .then_with(|| b.score().cmp(&a.score()))
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        rows
+    }
+
+    /// Repositories with only quiet notices: behind, stashed, cold or no upstream.
+    pub fn quiet(&self) -> Vec<&RepoStatus> {
+        let mut rows: Vec<&RepoStatus> = self
+            .repos
+            .iter()
+            .filter(|r| self.attention(r) == Attention::Info)
+            .collect();
         rows.sort_by(|a, b| b.score().cmp(&a.score()).then_with(|| a.name.cmp(&b.name)));
         rows
     }
 
+    /// Attention level for one repository, using this portfolio's clock.
+    pub fn attention(&self, repo: &RepoStatus) -> Attention {
+        repo.attention(self.generated_at, self.stale_after_days)
+    }
+
     pub fn tier(&self) -> Tier {
-        let c = self.counters();
-        if c.conflicts > 0 || c.errors > 0 {
-            Tier::Alert
-        } else if c.dirty_repos > 0 || c.ahead_repos > 0 {
-            Tier::Warn
-        } else {
-            Tier::Ok
-        }
+        self.counters().tier()
     }
 
     /// Full machine-readable form: counters, trend and every repo.
@@ -294,13 +330,102 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_repos_need_attention() {
-        let clean = Counters::default();
-        assert!(!clean.needs_attention());
-        let errored = Counters {
-            errors: 1,
+    fn attention_levels_drive_tier_and_exit() {
+        assert!(!Counters::default().needs_attention());
+        assert_eq!(
+            Counters {
+                behind_repos: 3,
+                ..Default::default()
+            }
+            .tier(),
+            Tier::Ok,
+            "behind is quiet"
+        );
+        assert_eq!(
+            Counters {
+                stashed_repos: 2,
+                ..Default::default()
+            }
+            .tier(),
+            Tier::Ok,
+            "stashes are quiet"
+        );
+        assert_eq!(
+            Counters {
+                dirty_repos: 1,
+                ..Default::default()
+            }
+            .tier(),
+            Tier::Warn
+        );
+        assert_eq!(
+            Counters {
+                detached: 1,
+                ..Default::default()
+            }
+            .tier(),
+            Tier::Warn
+        );
+        assert!(!Counters {
+            behind_repos: 1,
+            ..Default::default()
+        }
+        .needs_attention());
+        assert!(Counters {
+            dirty_repos: 1,
+            ..Default::default()
+        }
+        .needs_attention());
+        assert_eq!(
+            Counters {
+                errors: 1,
+                ..Default::default()
+            }
+            .tier(),
+            Tier::Alert
+        );
+    }
+
+    fn status(name: &str, ts: i64) -> RepoStatus {
+        RepoStatus {
+            name: name.to_string(),
+            upstream: Some("origin/main".to_string()),
+            last_commit_ts: Some(ts),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn quiet_and_actionable_repos_are_separated() {
+        let now = 100 * 86_400;
+        let clean = status("clean", now - 86_400);
+        let mut dirty = status("dirty", now - 86_400);
+        dirty.unstaged = 1;
+        let cold = status("cold", now - 90 * 86_400);
+        let mut stashed = status("stashed", now - 86_400);
+        stashed.stashes = 1;
+
+        let portfolio = Portfolio::new(vec![clean, dirty, cold, stashed], now, 30);
+        let ranked: Vec<&str> = portfolio.ranked().iter().map(|r| r.name.as_str()).collect();
+        let quiet: Vec<&str> = portfolio.quiet().iter().map(|r| r.name.as_str()).collect();
+
+        assert_eq!(ranked, ["dirty"]);
+        assert_eq!(quiet.len(), 2);
+        assert!(quiet.contains(&"cold"));
+        assert!(quiet.contains(&"stashed"));
+        assert_eq!(portfolio.counters().stashed_repos, 1);
+        assert_eq!(portfolio.tier(), Tier::Warn);
+    }
+
+    #[test]
+    fn flags_with_mentions_cold_and_missing_upstream() {
+        let now = 100 * 86_400;
+        let repo = RepoStatus {
+            last_commit_ts: Some(now - 90 * 86_400),
             ..Default::default()
         };
-        assert!(errored.needs_attention());
+        let flags = repo.flags_with(now, 30);
+        assert!(flags.iter().any(|f| f == "cold 90d"));
+        assert!(flags.iter().any(|f| f == "no upstream"));
     }
 }

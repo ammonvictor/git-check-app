@@ -54,6 +54,18 @@ pub struct Commit {
     pub ts: i64,
 }
 
+/// How much a repository wants the user's attention.
+///
+/// Ordered by severity: `None < Info < Warn < Alert`. `Info` states are worth
+/// listing but do not make `--exit-code` fail or turn the tray yellow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Attention {
+    None,
+    Info,
+    Warn,
+    Alert,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RepoStatus {
     pub path: PathBuf,
@@ -121,7 +133,42 @@ impl RepoStatus {
             .unwrap_or(false)
     }
 
-    /// Ranking weight used to order "needs attention" rows.
+    /// Severity of this repository's state.
+    ///
+    /// `Alert` is a conflict or a repo git could not read; `Warn` is work that
+    /// needs action (dirty, unpushed, detached); `Info` is worth listing but
+    /// not blocking (behind, stashed, no upstream, cold).
+    pub fn attention(&self, now: i64, stale_after_days: i64) -> Attention {
+        if self.error.is_some() || self.conflicted > 0 {
+            Attention::Alert
+        } else if self.dirty() > 0 || self.ahead > 0 || self.detached {
+            Attention::Warn
+        } else if self.behind > 0
+            || self.stashes > 0
+            || !self.has_upstream()
+            || self.is_cold(now, stale_after_days)
+        {
+            Attention::Info
+        } else {
+            Attention::None
+        }
+    }
+
+    /// Flags including the quiet states that depend on `now`.
+    pub fn flags_with(&self, now: i64, stale_after_days: i64) -> Vec<String> {
+        let mut flags = self.flags();
+        if !self.has_upstream() {
+            flags.push("no upstream".to_string());
+        }
+        if self.is_cold(now, stale_after_days) {
+            if let Some(age) = self.age_days(now) {
+                flags.push(format!("cold {age}d"));
+            }
+        }
+        flags
+    }
+
+    /// Ranking weight used to order rows within one attention level.
     pub fn score(&self) -> u64 {
         let mut score = 0u64;
         score += self.conflicted as u64 * 100;
@@ -140,7 +187,7 @@ impl RepoStatus {
             flags.push(format!("{} conflict", self.conflicted));
         }
         if self.dirty() > 0 {
-            flags.push(format!("{} dirty", self.dirty()));
+            flags.push(format!("{} changed", self.dirty()));
         }
         if self.ahead > 0 {
             flags.push(format!("{} ahead", self.ahead));
