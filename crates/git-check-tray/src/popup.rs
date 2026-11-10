@@ -34,13 +34,26 @@ pub fn build(snapshot: Option<&Snapshot>, launch_at_login: bool) -> (Menu, MenuI
         separator(&menu);
 
         let ranked = snapshot.portfolio.ranked();
+        let quiet = snapshot.portfolio.quiet();
         if counters.repos == 0 {
             append(&menu, "No repositories found".to_string());
-        } else if ranked.is_empty() {
+        } else if ranked.is_empty() && quiet.is_empty() {
             append(&menu, "Nothing needs attention".to_string());
         } else {
-            for repo in ranked.into_iter().take(3) {
-                append(&menu, offender_line(&repo.name, &repo.flags()));
+            if ranked.is_empty() {
+                append(&menu, "Nothing urgent".to_string());
+            }
+            for repo in ranked.iter().chain(quiet.iter()).take(3) {
+                append(
+                    &menu,
+                    offender_line(
+                        &repo.name,
+                        &repo.flags_with(
+                            snapshot.portfolio.generated_at,
+                            snapshot.portfolio.stale_after_days,
+                        ),
+                    ),
+                );
             }
         }
         separator(&menu);
@@ -83,12 +96,15 @@ fn separator(menu: &Menu) {
     menu.append(&PredefinedMenuItem::separator()).ok();
 }
 
-/// `9 dirty · 0 unpushed · 46 cold`, plus conflicts when there are any.
+/// `9 dirty · 2 unpushed · 1 behind · 46 cold`, all repo counts.
 pub fn kpi_line(counters: &Counters) -> String {
     let mut line = format!(
-        "{} dirty · {} unpushed · {} cold",
-        counters.dirty_repos, counters.ahead_commits, counters.cold
+        "{} dirty · {} unpushed · {} behind · {} cold",
+        counters.dirty_repos, counters.ahead_repos, counters.behind_repos, counters.cold
     );
+    if counters.stashed_repos > 0 {
+        line.push_str(&format!(" · {} stashed", counters.stashed_repos));
+    }
     if counters.conflicts > 0 {
         line.push_str(&format!(" · {} conflicts", counters.conflicts));
     }
@@ -149,20 +165,28 @@ mod tests {
     }
 
     #[test]
-    fn kpi_line_mentions_conflicts_only_when_present() {
+    fn kpi_line_mentions_quiet_and_conflict_counts() {
         let counters = Counters {
             dirty_repos: 9,
-            ahead_commits: 2,
+            ahead_repos: 2,
+            behind_repos: 1,
             cold: 46,
             ..Default::default()
         };
-        assert_eq!(kpi_line(&counters), "9 dirty · 2 unpushed · 46 cold");
+        assert_eq!(
+            kpi_line(&counters),
+            "9 dirty · 2 unpushed · 1 behind · 46 cold"
+        );
 
-        let with_conflicts = Counters {
+        let with_more = Counters {
+            stashed_repos: 3,
             conflicts: 1,
             ..counters
         };
-        assert!(kpi_line(&with_conflicts).ends_with("· 1 conflicts"));
+        assert_eq!(
+            kpi_line(&with_more),
+            "9 dirty · 2 unpushed · 1 behind · 46 cold · 3 stashed · 1 conflicts"
+        );
     }
 
     #[test]

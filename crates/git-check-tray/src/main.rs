@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use git_check_core::config::{Config, Root};
 use git_check_core::inspect::{Backend, Depth};
-use git_check_core::metrics::Tier;
+use git_check_core::metrics::{Counters, Tier};
 use git_check_core::Snapshot;
 use tray_icon::menu::MenuEvent;
 use tray_icon::{TrayIcon, TrayIconBuilder};
@@ -378,35 +378,23 @@ fn apply(tray: &TrayIcon, update: &Update) {
     match &update.snapshot {
         Some(snapshot) => {
             let counters = snapshot.portfolio.counters();
-            let mut tooltip = format!(
-                "{} repos · {} dirty · {} unpushed",
-                counters.repos, counters.dirty_repos, counters.ahead_commits
+            let quiet = snapshot.portfolio.quiet().len();
+            let text = tooltip(
+                &counters,
+                snapshot.discovery_errors.len(),
+                snapshot.portfolio.generated_at,
             );
-            // The counts live in the tooltip rather than the icon, so they
-            // stay legible at every DPI scaling.
-            if let Some(scan) = chrono::DateTime::from_timestamp(snapshot.portfolio.generated_at, 0)
-            {
-                tooltip.push_str(&format!(
-                    " · scanned {}",
-                    scan.with_timezone(&chrono::Local).format("%H:%M")
-                ));
-            }
-            if counters.conflicts > 0 {
-                tooltip.push_str(&format!(" · {} conflicts", counters.conflicts));
-            }
-            if counters.errors > 0 {
-                tooltip.push_str(&format!(" · {} errors", counters.errors));
-            }
             log::info!(
-                "scan: {} repos, {} dirty, {} unpushed, tier {} ({} ms)",
+                "scan: {} repos, {} dirty, {} unpushed, {} quiet, tier {} ({} ms)",
                 counters.repos,
                 counters.dirty_repos,
-                counters.ahead_commits,
-                snapshot.portfolio.tier().as_str(),
+                counters.ahead_repos,
+                quiet,
+                snapshot.tier().as_str(),
                 snapshot.duration_ms
             );
-            let _ = tray.set_icon(Some(icon::for_tier(snapshot.portfolio.tier())));
-            let _ = tray.set_tooltip(Some(tooltip));
+            let _ = tray.set_icon(Some(icon::for_tier(snapshot.tier())));
+            let _ = tray.set_tooltip(Some(text));
         }
         None => {
             let tooltip = update
@@ -418,6 +406,37 @@ fn apply(tray: &TrayIcon, update: &Update) {
             let _ = tray.set_tooltip(Some(tooltip));
         }
     }
+}
+
+/// Tooltip text. Every count is a repo count except `unreadable`, which counts
+/// paths; the labels say which.
+fn tooltip(counters: &Counters, unreadable: usize, generated_at: i64) -> String {
+    let mut text = format!(
+        "{} repos · {} dirty · {} unpushed · {} behind",
+        counters.repos, counters.dirty_repos, counters.ahead_repos, counters.behind_repos
+    );
+    if counters.stashed_repos > 0 {
+        text.push_str(&format!(" · {} stashed", counters.stashed_repos));
+    }
+    if counters.cold > 0 {
+        text.push_str(&format!(" · {} cold", counters.cold));
+    }
+    if counters.conflicts > 0 {
+        text.push_str(&format!(" · {} conflicts", counters.conflicts));
+    }
+    if counters.errors > 0 {
+        text.push_str(&format!(" · {} errors", counters.errors));
+    }
+    if unreadable > 0 {
+        text.push_str(&format!(" · {} unreadable", unreadable));
+    }
+    if let Some(scan) = chrono::DateTime::from_timestamp(generated_at, 0) {
+        text.push_str(&format!(
+            " · scanned {}",
+            scan.with_timezone(&chrono::Local).format("%H:%M")
+        ));
+    }
+    text
 }
 
 /// Hold an exclusive lock on the state directory for as long as the tray runs.
@@ -558,5 +577,28 @@ mod tests {
         assert!(has_root(&config, &dir.join(".")));
         assert!(!has_root(&config, &dir.join("other")));
         let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    fn tooltip_counts_repos_not_commits() {
+        let counters = Counters {
+            repos: 4,
+            dirty_repos: 2,
+            ahead_repos: 1,
+            ahead_commits: 99,
+            behind_repos: 3,
+            behind_commits: 99,
+            stashed_repos: 1,
+            cold: 2,
+            ..Default::default()
+        };
+        let text = tooltip(&counters, 1, 0);
+        assert!(text.contains("4 repos · 2 dirty · 1 unpushed · 3 behind"));
+        assert!(text.contains("1 stashed"));
+        assert!(text.contains("2 cold"));
+        assert!(text.contains("1 unreadable"));
+        assert!(
+            !text.contains("99"),
+            "commit counts must not leak into repo counts: {text}"
+        );
     }
 }
