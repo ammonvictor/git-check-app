@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Planned
+
+- Repository state history, so the menu can show "dirty for 9 days" and
+  "unpushed since Tuesday".
+- Dashboard window with charts and per-root rollups.
+- Watch mode.
+
+## [0.3.0] - 2026-11-10
+
+Third release: security hardening, correct commit totals, and safer config
+handling. There are no new features; the numbers and the exit code are now
+honest.
+
 ### Fixed
 
 - Commit totals, the 30-day trend and the streak count each commit once. Linked
@@ -30,11 +43,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.smudge` or `.process`, including one pulled in through `include.path`) is now
   reported and not inspected: `git status` would otherwise run that program while
   comparing a file.
-
-### Planned
-
-- Dashboard window with SQLite-backed history and per-root rollups.
-- Watch mode.
 
 ## [0.2.0] - 2026-11-09
 
@@ -101,5 +109,7 @@ loop.
 - Integration tests over real git fixtures: clean, dirty, ahead, behind,
   detached, depth/excludes and linked worktrees.
 
-[Unreleased]: https://github.com/ammonvictor/git-check-app/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ammonvictor/git-check-app/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ammonvictor/git-check-app/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/ammonvictor/git-check-app/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ammonvictor/git-check-app/releases/tag/v0.1.0

@@ -188,8 +188,7 @@ pub fn inspector(backend: Backend) -> Result<Box<dyn Inspector>> {
     match backend {
         Backend::Cli => Ok(Box::new(cli::CliInspector)),
         Backend::Libgit2 => Err(Error::Unsupported {
-            what: "the libgit2 backend is planned for M1 and not part of this build; \
-                   use --backend cli"
+            what: "the libgit2 backend is not part of this build yet; use --backend cli"
                 .to_string(),
         }),
     }

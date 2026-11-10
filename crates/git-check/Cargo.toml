@@ -1,6 +1,6 @@
 [package]
 name = "git-check"
-description = "Portfolio-wide git status for a folder of projects, from the CLI today and a tray app next"
+description = "Portfolio-wide git status for a folder of projects, from the CLI and a tray app"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,7 +17,7 @@ name = "git-check"
 path = "src/main.rs"
 
 [dependencies]
-git-check-core = { path = "../git-check-core", version = "0.2.0" }
+git-check-core = { path = "../git-check-core", version = "0.3.0" }
 serde_json.workspace = true
 toml.workspace = true
 chrono.workspace = true
