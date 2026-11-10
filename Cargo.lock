@@ -652,6 +652,7 @@ dependencies = [
  "clap",
  "git-check-core",
  "serde_json",
+ "tempfile",
  "toml",
 ]
 

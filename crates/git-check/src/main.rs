@@ -1,5 +1,6 @@
 //! `git-check` — portfolio-wide git status for a folder of projects.
 
+use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -8,8 +9,9 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 
 use git_check_core::config::{Config, Root};
-use git_check_core::inspect::{Backend, Depth};
+use git_check_core::inspect::{Backend, Depth, RepoStatus};
 use git_check_core::metrics::Portfolio;
+use git_check_core::Snapshot;
 
 const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
@@ -87,7 +89,7 @@ struct Cli {
     no_color: bool,
 
     /// Exit with status 1 when anything needs attention (dirty, unpushed,
-    /// conflict, or a repository git could not read).
+    /// detached, conflict, or a repository/path that could not be read).
     #[arg(long, global = true)]
     exit_code: bool,
 
@@ -199,13 +201,8 @@ fn effective_config(cli: &Cli, base: &Config) -> Config {
     config
 }
 
-fn scan(config: &Config, backend: Backend, depth: Depth) -> Result<(Portfolio, u128, Vec<String>)> {
-    let snapshot = git_check_core::scan(config, backend, depth)?;
-    Ok((
-        snapshot.portfolio,
-        snapshot.duration_ms,
-        snapshot.discovery_errors,
-    ))
+fn scan(config: &Config, backend: Backend, depth: Depth) -> Result<Snapshot> {
+    Ok(git_check_core::scan(config, backend, depth)?)
 }
 
 fn report(cli: &Cli, config: &Config, color: bool) -> Result<ExitCode> {
@@ -213,8 +210,9 @@ fn report(cli: &Cli, config: &Config, color: bool) -> Result<ExitCode> {
         Scope::Quick => Depth::Quick,
         Scope::Full => Depth::Full,
     };
-    let (portfolio, duration_ms, discovery_errors) = scan(config, cli.backend.into(), depth)?;
-    let counters = portfolio.counters();
+    let snapshot = scan(config, cli.backend.into(), depth)?;
+    let portfolio = &snapshot.portfolio;
+    let discovery_errors = &snapshot.discovery_errors;
 
     for warning in discovery_errors.iter().take(3) {
         eprintln!("warning: {warning}");
@@ -227,13 +225,13 @@ fn report(cli: &Cli, config: &Config, color: bool) -> Result<ExitCode> {
     }
 
     if cli.json {
-        let value = portfolio.to_json(duration_ms, &discovery_errors);
+        let value = portfolio.to_json(snapshot.duration_ms, discovery_errors);
         println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
-        print_report(&portfolio, duration_ms, color);
+        print_report(portfolio, discovery_errors, snapshot.duration_ms, color);
     }
 
-    if cli.exit_code && counters.needs_attention() {
+    if cli.exit_code && snapshot.needs_attention() {
         return Ok(ExitCode::from(1));
     }
     Ok(ExitCode::SUCCESS)
@@ -247,7 +245,12 @@ fn paint(text: &str, colour: &str, color: bool) -> String {
     }
 }
 
-fn print_report(portfolio: &Portfolio, duration_ms: u128, color: bool) {
+fn print_report(
+    portfolio: &Portfolio,
+    discovery_errors: &[String],
+    duration_ms: u128,
+    color: bool,
+) {
     let c = portfolio.counters();
 
     if c.repos == 0 {
@@ -266,10 +269,24 @@ fn print_report(portfolio: &Portfolio, duration_ms: u128, color: bool) {
         }
     };
     push(c.dirty_repos, "dirty", RED);
-    push(c.ahead_commits, "unpushed", YELLOW);
-    push(c.behind_commits, "behind", YELLOW);
+    push(c.ahead_repos, "unpushed", YELLOW);
+    push(c.behind_repos, "behind", YELLOW);
     push(c.conflicts, "conflicts", RED);
+    push(c.stashed_repos, "stashed", DIM);
     push(c.cold, "cold", DIM);
+    push(c.errors, "unreadable", RED);
+    if !discovery_errors.is_empty() {
+        let label = if discovery_errors.len() == 1 {
+            "unreadable path"
+        } else {
+            "unreadable paths"
+        };
+        segments.push(paint(
+            &format!("{} {label}", discovery_errors.len()),
+            RED,
+            color,
+        ));
+    }
 
     println!(
         "{}  {}  {}",
@@ -278,8 +295,9 @@ fn print_report(portfolio: &Portfolio, duration_ms: u128, color: bool) {
         paint(&format!("{duration_ms} ms"), DIM, color),
     );
 
-    let rows = portfolio.ranked();
-    if rows.is_empty() {
+    let needs = portfolio.ranked();
+    let quiet = portfolio.quiet();
+    if needs.is_empty() && quiet.is_empty() && discovery_errors.is_empty() {
         println!();
         println!(
             "{}",
@@ -292,73 +310,140 @@ fn print_report(portfolio: &Portfolio, duration_ms: u128, color: bool) {
         return;
     }
 
-    println!();
-    let width = rows
+    let duplicates = duplicate_names(needs.iter().chain(quiet.iter()).copied());
+    let width = needs
         .iter()
-        .map(|r| r.name.len())
+        .chain(quiet.iter())
+        .map(|r| label_for(r, duplicates.contains(r.name.as_str())).len())
         .max()
         .unwrap_or(0)
         .clamp(16, 34);
-    for repo in &rows {
-        let mut flags = repo.flags();
-        if flags.is_empty() {
-            if let Some(age) = repo.age_days(portfolio.generated_at) {
-                if repo.is_cold(portfolio.generated_at, portfolio.stale_after_days) {
-                    flags.push(format!("cold {age}d"));
-                }
-            }
-        }
-        if flags.is_empty() {
-            continue;
-        }
-        let colour = if repo.conflicted > 0 || repo.dirty() > 0 {
-            RED
-        } else {
-            YELLOW
-        };
-        let detail = if let Some(err) = &repo.error {
-            err.clone()
-        } else {
-            flags.join(", ")
-        };
-        println!(
-            "  {:<width$}  {}",
-            repo.name,
-            paint(&detail, colour, color),
-            width = width
-        );
-    }
 
-    if c.no_upstream > 0 || c.detached > 0 {
-        println!();
-        if c.no_upstream > 0 {
-            println!(
-                "  {}",
-                paint(
-                    &format!("{} without an upstream branch", c.no_upstream),
-                    DIM,
-                    color
-                )
-            );
+    println!();
+    for repo in &needs {
+        print_row(repo, portfolio, width, color, false, &duplicates);
+    }
+    if !quiet.is_empty() {
+        if !needs.is_empty() {
+            println!();
         }
-        if c.detached > 0 {
-            println!(
-                "  {}",
-                paint(&format!("{} with detached HEAD", c.detached), DIM, color)
-            );
+        println!("{}", paint("quiet", DIM, color));
+        for repo in &quiet {
+            print_row(repo, portfolio, width, color, true, &duplicates);
         }
     }
 
     println!();
-    let total = c.repos;
+    if !needs.is_empty() {
+        println!(
+            "{}",
+            paint(
+                &format!("{} of {} repos need attention.", needs.len(), c.repos),
+                DIM,
+                color
+            )
+        );
+    } else if discovery_errors.is_empty() {
+        println!("{}", paint("Nothing needs attention.", DIM, color));
+    } else {
+        println!(
+            "{}",
+            paint("Nothing in the repositories needs attention.", DIM, color)
+        );
+    }
+    if !quiet.is_empty() {
+        let verb = if quiet.len() == 1 { "is" } else { "are" };
+        println!(
+            "{}",
+            paint(
+                &format!(
+                    "{} more {verb} quiet (behind, stashed, cold, or without an upstream).",
+                    quiet.len()
+                ),
+                DIM,
+                color
+            )
+        );
+    }
+    if !discovery_errors.is_empty() {
+        let paths = if discovery_errors.len() == 1 {
+            "path"
+        } else {
+            "paths"
+        };
+        println!(
+            "{}",
+            paint(
+                &format!("{} {paths} could not be read.", discovery_errors.len()),
+                RED,
+                color
+            )
+        );
+    }
+}
+
+/// Print one repository row; `quiet` rows are dim and never red.
+fn print_row(
+    repo: &RepoStatus,
+    portfolio: &Portfolio,
+    width: usize,
+    color: bool,
+    quiet: bool,
+    duplicates: &HashSet<&str>,
+) {
+    let flags = repo.flags_with(portfolio.generated_at, portfolio.stale_after_days);
+    let detail = if let Some(err) = &repo.error {
+        err.clone()
+    } else {
+        flags.join(", ")
+    };
+    if detail.is_empty() {
+        return;
+    }
+    let colour = if quiet {
+        DIM
+    } else if repo.conflicted > 0 || repo.dirty() > 0 {
+        RED
+    } else {
+        YELLOW
+    };
+    let name = label_for(repo, duplicates.contains(repo.name.as_str()));
     println!(
-        "{}",
-        paint(
-            &format!("{} of {total} repos need attention.", rows.len()),
-            DIM,
-            color
-        )
+        "  {:<width$}  {}",
+        name,
+        paint(&detail, colour, color),
+        width = width
     );
+}
+
+/// Repository names that appear more than once among the printed rows.
+fn duplicate_names<'a>(rows: impl Iterator<Item = &'a RepoStatus>) -> HashSet<&'a str> {
+    let mut seen = HashSet::new();
+    let mut duplicates = HashSet::new();
+    for repo in rows {
+        if !seen.insert(repo.name.as_str()) {
+            duplicates.insert(repo.name.as_str());
+        }
+    }
+    duplicates
+}
+
+/// Disambiguate a repeated folder name with its parent folder.
+fn label_for(repo: &RepoStatus, duplicate: bool) -> String {
+    if !duplicate {
+        return repo.name.clone();
+    }
+    let parent = repo
+        .path
+        .parent()
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if parent.is_empty() {
+        repo.name.clone()
+    } else {
+        format!("{} ({parent})", repo.name)
+    }
 }
 
 /// Indices of roots that `selector` names: an exact label, or the same
