@@ -27,7 +27,7 @@ log = "0.4"
 [target.'cfg(target_os = "linux")'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false, features = ["ksni"] }
 # xdg-portal keeps the dialog GTK-free, matching the tray backend.
-rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.18", default-features = false, features = ["xdg-portal"] }
 
 # macOS needs AppKit directly to become an accessory app (no Dock icon).
 [target.'cfg(target_os = "macos")'.dependencies]
